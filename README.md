@@ -6,19 +6,15 @@ Im going to make a To-do List for the features i want to implement for my Bot.
 (I will try to make these tools optional, because alot of bots already feature them)
 
 1. **Basic Commands**
-   - [ ] Add a `!help` command to display a list of available commands.
-   - [ ] Implement a `!ping` command to check bot responsiveness.
-   - [ ] Add a `!about` command to describe the bot's purpose.
+   - [x] Add a `!help` command to display a list of available commands.
+   - [x] Implement a `!ping` command to check bot responsiveness.
+   - [ **in progress** ] Add a `!about` command to describe the bot's purpose.
 
-2. **Welcome and Goodbye System**
-   - [ ] Create a system to welcome new users to the server with a customizable message.
-   - [ ] Implement a goodbye message when users leave the server.
-
-3. **Role Management**
+2. **Role Management**
    - [ ] Set up a self-assignable role system (e.g., using reaction roles).
    - [ ] Allow admins to assign/remove roles with commands.
 
-4. **Moderation Tools**
+3. **Moderation Tools**
    - [ ] Add commands to mute, kick, and ban users.
    - [ ] Create an auto-moderation feature to delete spam or inappropriate content.
    - [ ] Implement a warning system with a strike counter.
@@ -35,9 +31,10 @@ Im going to make a To-do List for the features i want to implement for my Bot.
      - [ ] Allow users to purchase roles using the currency with a command (e.g., `!buyrole [role name]`).
 
 2. **Datetime Converter**
-   - [ ] Create a command to convert timezones:
-     - [ ] `!convert [time] [timezone] to [timezone]` to handle conversions.
-     - [ ] Support both 12-hour and 24-hour formats.
+   (Still in Progress, maybe i'll add visual Menu)
+   - [x] Create a command to convert timezones:
+     - [x] `!convert [time] [timezone] to [timezone]` to handle conversions.
+     - [x] Support both 12-hour and 24-hour formats.
    - [ ] Include a command to display server-specific or user-specific timezones.
 
 3. **Minigames**
