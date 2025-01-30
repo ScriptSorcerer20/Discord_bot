@@ -8,14 +8,14 @@ Im going to make a To-do List for the features i want to implement for my Bot.
 1. **Basic Commands**
    - [x] Add a `!help` command to display a list of available commands.
    - [x] Implement a `!ping` command to check bot responsiveness.
-   - [ **in progress** ] Add a `!about` command to describe the bot's purpose.
+   - [ **Only Text missing** ] Add a `!about` command to describe the bot's purpose.
 
 2. **Role Management**
    - [ ] Set up a self-assignable role system (e.g., using reaction roles).
    - [ ] Allow admins to assign/remove roles with commands.
 
 3. **Moderation Tools**
-   - [ ] Add commands to mute, kick, and ban users.
+   - [ ] Add commands to mute, x kick, and ban users.
    - [ ] Create an auto-moderation feature to delete spam or inappropriate content.
    - [ ] Implement a warning system with a strike counter.
 
