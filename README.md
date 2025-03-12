@@ -15,7 +15,7 @@ Im going to make a To-do List for the features i want to implement for my Bot.
    - [ ] Allow admins to assign/remove roles with commands.
 
 3. **Moderation Tools**
-   - [ ] Add commands to mute, x kick, and ban users.
+   - [ ] Add commands to mute, x kick, and x temp_ban users.
    - [ ] Create an auto-moderation feature to delete spam or inappropriate content.
    - [ ] Implement a warning system with a strike counter.
 

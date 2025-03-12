@@ -19,26 +19,20 @@ module.exports = {
                 .setName('reason')
                 .setDescription('The reason of the mute')),
     async execute(interaction) {
-        // Get the user and duration from the command options
         const target = interaction.options.getUser('target');
         const duration = interaction.options.getInteger('duration');
+        const reason = interaction.options.getString('reason');
 
         // Convert duration to milliseconds
         const durationMs = duration * 60 * 1000;
 
-        try {
-            // Apply the timeout
-            await target.timeout(durationMs);
+        const guildmember = await interaction.guild.members.fetch(target.id);
 
-            await interaction.reply({
-                content: `${target.tag} has been muted for ${duration} minutes.`
-            });
-        } catch (error) {
-            console.error(error);
-            await interaction.reply({
-                content: 'I was unable to mute the member.',
-                ephemeral: true,
-            });
+        const muteRole = interaction.guild.roles.find(role => role.name === "mute");
+        if (!muteRole) {
+
+        } else {
+            await guildmember.roles.add(muteRole, reason);
         }
     },
 };
