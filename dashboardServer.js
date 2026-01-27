@@ -1,13 +1,10 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-
 const axios = require('axios');
 const express = require('express');
-
-const { addWarning, getWarnings } = require('./services/warnings');
-const { getGuildPermissions, updateGuildPermissions } = require('./services/permissions');
-
+const {addWarning, getWarnings} = require('./services/warnings');
+const {getGuildPermissions, updateGuildPermissions} = require('./services/permissions');
 const DEFAULT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const PERMISSION_BITS = {
     ADMINISTRATOR: 0x8n,
@@ -50,6 +47,14 @@ const SESSION_TTL_MS = Number.parseInt(
     10,
 );
 
+console.log('[oauth config]', {
+    DISCORD_CLIENT_ID_present: Boolean(DISCORD_CLIENT_ID && String(DISCORD_CLIENT_ID).trim()),
+    DISCORD_CLIENT_SECRET_present: Boolean(DISCORD_CLIENT_SECRET && String(DISCORD_CLIENT_SECRET).trim()),
+    DISCORD_REDIRECT_URI: DISCORD_REDIRECT_URI || null,
+    configFilePath: path.join(__dirname, 'config.json'),
+    configFileExists: fs.existsSync(path.join(__dirname, 'config.json')),
+});
+
 const DISCORD_API_BASE = 'https://discord.com/api';
 
 const sessionStore = new Map();
@@ -91,7 +96,7 @@ const setCookie = (res, name, value, options = {}) => {
 };
 
 const clearCookie = (res, name) => {
-    setCookie(res, name, '', { maxAge: 0 });
+    setCookie(res, name, '', {maxAge: 0});
 };
 
 const createSession = (payload) => {
@@ -103,7 +108,7 @@ const createSession = (payload) => {
         expiresAt,
     });
 
-    return { sessionId, expiresAt };
+    return {sessionId, expiresAt};
 };
 
 const getSession = (sessionId) => {
@@ -225,12 +230,12 @@ const ensureSession = (req, res, next) => {
     const cookies = parseCookies(req.headers.cookie);
     const sessionId = cookies.dashboard_session;
     if (!sessionId) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({error: 'Unauthorized'});
     }
 
     const session = getSession(sessionId);
     if (!session) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({error: 'Unauthorized'});
     }
 
     req.session = session;
@@ -243,16 +248,16 @@ const ensureManageableGuild = async (req, res, next) => {
         const guilds = await fetchDiscordUserGuilds(req.session.accessToken);
         const guild = guilds.find((entry) => entry.id === req.params.guildId);
         if (!guild) {
-            return res.status(404).json({ error: 'Guild not found' });
+            return res.status(404).json({error: 'Guild not found'});
         }
         if (!canManageGuild(guild)) {
-            return res.status(403).json({ error: 'Forbidden' });
+            return res.status(403).json({error: 'Forbidden'});
         }
 
         req.guild = guild;
         return next();
     } catch (error) {
-        return res.status(502).json({ error: 'Failed to fetch guilds' });
+        return res.status(502).json({error: 'Failed to fetch guilds'});
     }
 };
 
@@ -260,10 +265,11 @@ const createDashboardApp = () => {
     const app = express();
 
     app.use(express.json());
+    app.use(express.static(path.join(__dirname, 'public')));
 
     app.get('/auth/discord', (req, res) => {
         if (!ensureOAuthConfig()) {
-            return res.status(500).json({ error: 'Missing Discord OAuth configuration' });
+            return res.status(500).json({error: 'Missing Discord OAuth configuration'});
         }
 
         const state = crypto.randomBytes(16).toString('hex');
@@ -279,26 +285,25 @@ const createDashboardApp = () => {
 
     app.get('/auth/discord/callback', async (req, res) => {
         if (!ensureOAuthConfig()) {
-            return res.status(500).json({ error: 'Missing Discord OAuth configuration' });
+            return res.status(500).json({error: 'Missing Discord OAuth configuration'});
         }
 
-        const { code, state } = req.query;
+        const {code, state} = req.query;
         const cookies = parseCookies(req.headers.cookie);
         if (!code || !state || cookies.oauth_state !== state) {
-            return res.status(400).json({ error: 'Invalid OAuth state' });
+            return res.status(400).json({error: 'Invalid OAuth state'});
         }
 
         try {
             const tokenData = await fetchDiscordAccessToken(code);
             const user = await fetchDiscordUser(tokenData.access_token);
 
-            const { sessionId, expiresAt } = createSession({
+            const {sessionId, expiresAt} = createSession({
                 accessToken: tokenData.access_token,
                 refreshToken: tokenData.refresh_token,
                 tokenType: tokenData.token_type,
                 scope: tokenData.scope,
                 user,
-                expiresAt,
             });
 
             setCookie(res, 'dashboard_session', sessionId, {
@@ -313,9 +318,22 @@ const createDashboardApp = () => {
                 return res.redirect(DASHBOARD_CLIENT_URL);
             }
 
-            return res.status(200).json({ user });
+            if (req.accepts('html')) {
+                return res.redirect('/');
+            }
+
+            return res.status(200).json({user});
         } catch (error) {
-            return res.status(502).json({ error: 'Failed to authenticate with Discord' });
+            console.error('Discord OAuth failed', {
+                message: error.message,
+                status: error.response?.status,
+                data: error.response?.data,
+            });
+
+            return res.status(502).json({
+                error: 'Failed to authenticate with Discord',
+                details: error.response?.data || error.message,
+            });
         }
     });
 
@@ -329,9 +347,9 @@ const createDashboardApp = () => {
         try {
             const guilds = await fetchDiscordUserGuilds(req.session.accessToken);
             const manageableGuilds = guilds.filter(canManageGuild);
-            return res.json({ guilds: manageableGuilds });
+            return res.json({guilds: manageableGuilds});
         } catch (error) {
-            return res.status(502).json({ error: 'Failed to fetch guilds' });
+            return res.status(502).json({error: 'Failed to fetch guilds'});
         }
     });
 
@@ -342,9 +360,9 @@ const createDashboardApp = () => {
         async (req, res) => {
             try {
                 const permissions = await getGuildPermissions(req.params.guildId);
-                return res.json({ permissions });
+                return res.json({permissions});
             } catch (error) {
-                return res.status(500).json({ error: 'Failed to fetch permissions' });
+                return res.status(500).json({error: 'Failed to fetch permissions'});
             }
         },
     );
@@ -359,9 +377,9 @@ const createDashboardApp = () => {
                     guildId: req.params.guildId,
                     permissions: req.body || {},
                 });
-                return res.json({ permissions });
+                return res.json({permissions});
             } catch (error) {
-                return res.status(500).json({ error: 'Failed to update permissions' });
+                return res.status(500).json({error: 'Failed to update permissions'});
             }
         },
     );
@@ -373,9 +391,9 @@ const createDashboardApp = () => {
         async (req, res) => {
             try {
                 const roles = await fetchDiscordGuildRoles(req.params.guildId);
-                return res.json({ roles });
+                return res.json({roles});
             } catch (error) {
-                return res.status(500).json({ error: 'Failed to fetch roles' });
+                return res.status(500).json({error: 'Failed to fetch roles'});
             }
         },
     );
@@ -390,9 +408,9 @@ const createDashboardApp = () => {
                     guildId: req.params.guildId,
                     userId: req.params.userId,
                 });
-                return res.json({ warnings });
+                return res.json({warnings});
             } catch (error) {
-                return res.status(500).json({ error: 'Failed to fetch warnings' });
+                return res.status(500).json({error: 'Failed to fetch warnings'});
             }
         },
     );
@@ -402,11 +420,10 @@ const createDashboardApp = () => {
         ensureSession,
         ensureManageableGuild,
         async (req, res) => {
-            const { reason } = req.body || {};
+            const {reason} = req.body || {};
             if (!reason) {
-                return res.status(400).json({ error: 'Reason is required' });
+                return res.status(400).json({error: 'Reason is required'});
             }
-
             try {
                 const result = await addWarning({
                     guildId: req.params.guildId,
@@ -416,11 +433,10 @@ const createDashboardApp = () => {
                 });
                 return res.status(201).json(result);
             } catch (error) {
-                return res.status(500).json({ error: 'Failed to add warning' });
+                return res.status(500).json({error: 'Failed to add warning'});
             }
         },
     );
-
     return app;
 };
 

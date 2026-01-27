@@ -1,4 +1,3 @@
-// exampleCommand.js
 const { SlashCommandBuilder } = require('discord.js');
 const { connectToDatabase } = require('../../db.js');
 
@@ -15,14 +14,9 @@ module.exports = {
     async execute(interaction) {
         const dbClient = await connectToDatabase();
         const message = interaction.options.getString('message');
-
-        // Choose a DB + Collection
         const db = dbClient.db('discord');
         const collection = db.collection('test');
-
-        // Example: Insert something
         await collection.insertOne({ userId: interaction.user.id, message: message });
-
         await interaction.reply('Successfully inserted your data into MongoDB.');
     },
 };

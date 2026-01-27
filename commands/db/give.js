@@ -22,23 +22,19 @@ module.exports = {
         const dbClient = await connectToDatabase();
         const target = interaction.options.getUser('target');
         const amount = interaction.options.getInteger('amount');
-
         if (target.bot) {
             return interaction.reply({
                 content: 'You cannot grant coins to bot accounts.',
                 ephemeral: true,
             });
         }
-
         const db = dbClient.db('discord');
         const collection = db.collection('currency');
-
         await collection.updateOne(
             { userID: target.id },
             { $inc: { balance: amount } },
             { upsert: true }
         );
-
         return interaction.reply({
             content: `You granted **${amount}** coins to ${target.tag}.`,
         });

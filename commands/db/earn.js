@@ -9,12 +9,10 @@ const formatDuration = (ms) => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-
     const parts = [];
     if (hours) parts.push(`${hours}h`);
     if (minutes) parts.push(`${minutes}m`);
     if (!hours && !minutes) parts.push(`${seconds}s`);
-
     return parts.join(' ');
 };
 
@@ -28,11 +26,9 @@ module.exports = {
         const db = dbClient.db('discord');
         const collection = db.collection('currency');
         const now = new Date();
-
         const userId = interaction.user.id;
         const userData = await collection.findOne({ userID: userId });
         const lastClaim = userData?.lastClaimedAt ? new Date(userData.lastClaimedAt) : null;
-
         if (lastClaim) {
             const elapsed = now - lastClaim;
             if (elapsed < COOLDOWN_MS) {
@@ -43,7 +39,6 @@ module.exports = {
                 });
             }
         }
-
         await collection.updateOne(
             { userID: userId },
             {
@@ -52,7 +47,6 @@ module.exports = {
             },
             { upsert: true }
         );
-
         return interaction.reply({
             content: `You earned **${REWARD_AMOUNT}** coins! Come back tomorrow for more.`,
         });

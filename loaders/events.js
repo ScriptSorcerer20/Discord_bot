@@ -11,7 +11,6 @@ const getEventFilePaths = (eventsPath) =>
 
 const loadEventModules = (eventsPath) => {
     const eventFiles = getEventFilePaths(eventsPath);
-
     return eventFiles.map((filePath) => ({
         filePath,
         event: require(filePath),

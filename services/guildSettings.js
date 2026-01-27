@@ -15,7 +15,6 @@ const DEFAULT_GUILD_SETTINGS = {
 const normalizeGuildSettings = (settings = {}) => {
     const moderation = settings.moderation ?? {};
     const strikeThresholds = moderation.strikeThresholds ?? {};
-
     return {
         ...DEFAULT_GUILD_SETTINGS,
         ...settings,
@@ -34,12 +33,10 @@ const getGuildSettings = async (guildId) => {
     if (!guildId) {
         return normalizeGuildSettings();
     }
-
     const dbClient = await connectToDatabase();
     const db = dbClient.db('discord');
     const collection = db.collection('guild_settings');
     const settings = await collection.findOne({ guildId });
-
     return normalizeGuildSettings(settings);
 };
 

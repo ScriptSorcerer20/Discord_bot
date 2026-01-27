@@ -30,7 +30,6 @@ module.exports = {
                     ephemeral: true,
                 });
             }
-
             await member.kick(reason);
             await recordModerationAction({
                 guildId: interaction.guildId,
@@ -40,7 +39,6 @@ module.exports = {
                 reason,
                 metadata: {},
             });
-
             await interaction.reply(`Kicked ${user.tag} for: ${reason}`);
         } catch (error) {
             console.error(error);

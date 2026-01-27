@@ -10,8 +10,6 @@ module.exports = {
         const tempBanCollection = db.collection('tempban');
         const scheduledBanIds = new Set();
         let pollingInterval = null;
-
-        // 2) Define a function to schedule unbans
         async function scheduleUnban(banData) {
             const banId = banData?._id?.toString();
             if (banId && scheduledBanIds.has(banId)) {
@@ -54,7 +52,6 @@ module.exports = {
             if (pollingInterval) {
                 return;
             }
-            console.warn('Change streams unavailable; falling back to polling for temp bans.');
             pollingInterval = setInterval(() => {
                 loadAndScheduleBans().catch((err) => {
                     console.error('Error polling temp bans:', err);

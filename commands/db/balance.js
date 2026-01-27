@@ -15,11 +15,9 @@ module.exports = {
         const dbClient = await connectToDatabase();
         const db = dbClient.db('discord');
         const collection = db.collection('currency');
-
         const target = interaction.options.getUser('user') ?? interaction.user;
         const targetData = await collection.findOne({ userID: target.id });
         const balance = targetData?.balance ?? 0;
-
         return interaction.reply({
             content: `${target.tag} has **${balance}** coins.`,
         });
