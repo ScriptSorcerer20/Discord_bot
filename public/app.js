@@ -1,223 +1,159 @@
-const state = {
-    guilds: [],
-    selectedGuildId: null,
+const createFetchError = async (response) => {
+    let payload = {};
+    try {
+        payload = await response.json();
+    } catch (error) {
+        payload = {};
+    }
+    const message = payload.message || payload.error || `Request failed with status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = payload.error;
+    error.details = payload.details;
+    error.payload = payload;
+    return error;
 };
 
-const elements = {
-    loginButton: document.getElementById('loginButton'),
-    logoutButton: document.getElementById('logoutButton'),
-    sessionStatus: document.getElementById('sessionStatus'),
-    guildCard: document.getElementById('guildCard'),
-    warningsCard: document.getElementById('warningsCard'),
-    guildSelect: document.getElementById('guildSelect'),
-    permissionsEditor: document.getElementById('permissionsEditor'),
-    updatePermissionsButton: document.getElementById('updatePermissionsButton'),
-    rolesList: document.getElementById('rolesList'),
-    warningUserId: document.getElementById('warningUserId'),
-    loadWarningsButton: document.getElementById('loadWarningsButton'),
-    warningsList: document.getElementById('warningsList'),
-    newWarningUserId: document.getElementById('newWarningUserId'),
-    warningReason: document.getElementById('warningReason'),
-    addWarningButton: document.getElementById('addWarningButton'),
-    warningResult: document.getElementById('warningResult'),
-};
-
-const setStatus = (message, isAuthed) => {
-    elements.sessionStatus.textContent = message;
-    elements.logoutButton.hidden = !isAuthed;
-    elements.guildCard.hidden = !isAuthed;
-    elements.warningsCard.hidden = !isAuthed;
-};
-
-const fetchJson = async (url, options) => {
+const fetchJson = async (url, options = {}) => {
     const response = await fetch(url, {
         credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
+            ...(options.headers || {}),
         },
         ...options,
     });
 
     if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        const message = body.error || `Request failed with status ${response.status}`;
-        throw new Error(message);
+        throw await createFetchError(response);
     }
 
     return response.json().catch(() => ({}));
 };
 
-const loadGuilds = async () => {
-    const data = await fetchJson('/api/guilds');
-    state.guilds = data.guilds || [];
-    elements.guildSelect.innerHTML = '';
-
-    state.guilds.forEach((guild) => {
-        const option = document.createElement('option');
-        option.value = guild.id;
-        option.textContent = guild.name;
-        elements.guildSelect.appendChild(option);
-    });
-
-    if (state.guilds.length > 0) {
-        state.selectedGuildId = state.guilds[0].id;
-        elements.guildSelect.value = state.selectedGuildId;
-        await loadGuildDetails();
-    }
-};
-
-const renderRoles = (roles) => {
-    elements.rolesList.innerHTML = '';
-    roles.forEach((role) => {
-        const item = document.createElement('li');
-        item.textContent = `${role.name} (${role.id})`;
-        elements.rolesList.appendChild(item);
-    });
-
-    if (roles.length === 0) {
-        const item = document.createElement('li');
-        item.textContent = 'No roles returned.';
-        elements.rolesList.appendChild(item);
-    }
-};
-
-const loadGuildDetails = async () => {
-    if (!state.selectedGuildId) {
+const showToast = (message, type = 'success') => {
+    const container = document.getElementById('toastContainer');
+    if (!container) {
         return;
     }
-
-    const [permissionsData, rolesData] = await Promise.all([
-        fetchJson(`/api/guilds/${state.selectedGuildId}/permissions`),
-        fetchJson(`/api/guilds/${state.selectedGuildId}/roles`),
-    ]);
-
-    elements.permissionsEditor.value = JSON.stringify(permissionsData.permissions || {}, null, 2);
-    renderRoles(rolesData.roles || []);
+    const toast = document.createElement('div');
+    toast.className = `toast toast--${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('toast--visible');
+    }, 10);
+    setTimeout(() => {
+        toast.classList.remove('toast--visible');
+        setTimeout(() => toast.remove(), 200);
+    }, 3200);
 };
 
-const updatePermissions = async () => {
-    if (!state.selectedGuildId) {
+const setErrorBanner = (bannerEl, message, details) => {
+    if (!bannerEl) {
         return;
     }
-
-    const rawValue = elements.permissionsEditor.value.trim();
-    if (!rawValue) {
-        return;
+    const messageEl = bannerEl.querySelector('[data-role="error-message"]');
+    const copyButton = bannerEl.querySelector('[data-role="error-copy"]');
+    if (messageEl) {
+        messageEl.textContent = message;
     }
-
-    let payload;
-    try {
-        payload = JSON.parse(rawValue);
-    } catch (error) {
-        elements.permissionsEditor.focus();
-        throw new Error('Permissions JSON is invalid.');
+    if (copyButton) {
+        copyButton.onclick = async () => {
+            const payload = details || {message};
+            try {
+                await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+                showToast('Error details copied.', 'success');
+            } catch (error) {
+                showToast('Unable to copy details.', 'error');
+            }
+        };
     }
-
-    const data = await fetchJson(`/api/guilds/${state.selectedGuildId}/permissions`, {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-    });
-
-    elements.permissionsEditor.value = JSON.stringify(data.permissions || {}, null, 2);
+    bannerEl.hidden = false;
 };
 
-const loadWarnings = async (userId) => {
-    if (!state.selectedGuildId || !userId) {
+const clearErrorBanner = (bannerEl) => {
+    if (!bannerEl) {
         return;
     }
-
-    const data = await fetchJson(`/api/guilds/${state.selectedGuildId}/warnings/${userId}`);
-    elements.warningsList.innerHTML = '';
-
-    const warnings = data.warnings || [];
-    if (warnings.length === 0) {
-        const item = document.createElement('li');
-        item.textContent = 'No warnings found.';
-        elements.warningsList.appendChild(item);
-        return;
-    }
-
-    warnings.forEach((warning) => {
-        const item = document.createElement('li');
-        const issuedAt = warning.createdAt ? new Date(warning.createdAt).toLocaleString() : 'Unknown date';
-        item.textContent = `${warning.reason} — ${issuedAt}`;
-        elements.warningsList.appendChild(item);
-    });
+    bannerEl.hidden = true;
 };
 
-const addWarning = async () => {
-    if (!state.selectedGuildId) {
-        return;
+const formatUserDisplay = (user) => {
+    if (!user) {
+        return 'Not signed in';
     }
-
-    const userId = elements.newWarningUserId.value.trim();
-    const reason = elements.warningReason.value.trim();
-
-    if (!userId || !reason) {
-        elements.warningResult.textContent = 'User ID and reason are required.';
-        return;
-    }
-
-    const data = await fetchJson(`/api/guilds/${state.selectedGuildId}/warnings/${userId}`, {
-        method: 'POST',
-        body: JSON.stringify({ reason }),
-    });
-
-    elements.warningResult.textContent = `Warning added: ${data.warning?.reason || reason}`;
-    elements.warningReason.value = '';
+    const tag = user.discriminator && user.discriminator !== '0' ? `#${user.discriminator}` : '';
+    return `${user.username}${tag}`;
 };
 
-const showError = (message) => {
-    elements.warningResult.textContent = message;
-};
-
-const init = async () => {
-    elements.loginButton.addEventListener('click', () => {
-        window.location.href = '/auth/discord';
-    });
-
-    elements.logoutButton.addEventListener('click', async () => {
-        await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
-        setStatus('Logged out. Sign in to manage guilds.', false);
-    });
-
-    elements.guildSelect.addEventListener('change', async (event) => {
-        state.selectedGuildId = event.target.value;
-        await loadGuildDetails();
-    });
-
-    elements.updatePermissionsButton.addEventListener('click', async () => {
-        elements.warningResult.textContent = '';
-        try {
-            await updatePermissions();
-            elements.warningResult.textContent = 'Permissions updated successfully.';
-        } catch (error) {
-            showError(error.message);
+const debounce = (callback, wait = 300) => {
+    let timeoutId;
+    return (...args) => {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
         }
-    });
+        timeoutId = setTimeout(() => callback(...args), wait);
+    };
+};
 
-    elements.loadWarningsButton.addEventListener('click', async () => {
-        try {
-            await loadWarnings(elements.warningUserId.value.trim());
-        } catch (error) {
-            showError(error.message);
-        }
-    });
+const initIndexPage = async () => {
+    const sessionStatus = document.getElementById('sessionStatus');
+    const loginButton = document.getElementById('loginButton');
+    const dashboardButton = document.getElementById('dashboardButton');
+    const logoutButton = document.getElementById('logoutButton');
+    const banner = document.getElementById('banner');
 
-    elements.addWarningButton.addEventListener('click', async () => {
-        try {
-            await addWarning();
-        } catch (error) {
-            showError(error.message);
-        }
-    });
+    if (!sessionStatus || !loginButton) {
+        return;
+    }
 
     try {
-        await loadGuilds();
-        setStatus('Authenticated. Choose a guild to get started.', true);
+        const data = await fetchJson('/api/me');
+        sessionStatus.textContent = `Signed in as ${formatUserDisplay(data.user)}.`;
+        loginButton.hidden = true;
+        dashboardButton.hidden = false;
+        logoutButton.hidden = false;
+        if (banner) {
+            banner.textContent = '';
+            banner.style.display = 'none';
+        }
     } catch (error) {
-        setStatus('Sign in with Discord to manage your guilds.', false);
+        sessionStatus.textContent = 'You are not signed in yet.';
+        loginButton.hidden = false;
+        dashboardButton.hidden = true;
+        logoutButton.hidden = true;
+        if (banner) {
+            banner.textContent = 'Log in with Discord to access the dashboard.';
+            banner.style.display = 'block';
+        }
     }
+
+    logoutButton?.addEventListener('click', async () => {
+        try {
+            await fetch('/auth/logout', {method: 'POST', credentials: 'include'});
+            sessionStatus.textContent = 'Logged out successfully.';
+            loginButton.hidden = false;
+            dashboardButton.hidden = true;
+            logoutButton.hidden = true;
+        } catch (error) {
+            if (banner) {
+                banner.textContent = error.message || 'Failed to log out.';
+                banner.style.display = 'block';
+            }
+        }
+    });
 };
 
-init();
+document.addEventListener('DOMContentLoaded', () => {
+    initIndexPage();
+});
+
+window.dashboardApi = {
+    fetchJson,
+    showToast,
+    setErrorBanner,
+    clearErrorBanner,
+    formatUserDisplay,
+    debounce,
+};

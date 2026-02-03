@@ -6,13 +6,50 @@ const DEFAULT_GUILD_PERMISSIONS = {
     commandPermissions: {},
 };
 
-const normalizePermissionConfig = (config = {}) => ({
-    ...DEFAULT_GUILD_PERMISSIONS,
-    ...config,
-    adminRoleIds: Array.isArray(config.adminRoleIds) ? config.adminRoleIds : [],
-    adminUserIds: Array.isArray(config.adminUserIds) ? config.adminUserIds : [],
-    commandPermissions: config.commandPermissions ?? {},
-});
+const COMMAND_NAME_REGEX = /^[a-z0-9_-]{1,32}$/i;
+
+const normalizeIdArray = (value) => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    const normalized = value
+        .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+        .filter((entry) => entry.length > 0);
+
+    return Array.from(new Set(normalized));
+};
+
+const sanitizeCommandPermissions = (commandPermissions = {}) => {
+    if (!commandPermissions || typeof commandPermissions !== 'object') {
+        return {};
+    }
+
+    const sanitized = {};
+    for (const [commandName, commandConfig] of Object.entries(commandPermissions)) {
+        if (!COMMAND_NAME_REGEX.test(commandName)) {
+            continue;
+        }
+
+        sanitized[commandName] = {
+            allowedRoleIds: normalizeIdArray(commandConfig?.allowedRoleIds),
+            allowedUserIds: normalizeIdArray(commandConfig?.allowedUserIds),
+        };
+    }
+
+    return sanitized;
+};
+
+const normalizePermissionConfig = (config = {}) => {
+    const safeConfig = config && typeof config === 'object' ? config : {};
+
+    return {
+        ...DEFAULT_GUILD_PERMISSIONS,
+        adminRoleIds: normalizeIdArray(safeConfig.adminRoleIds),
+        adminUserIds: normalizeIdArray(safeConfig.adminUserIds),
+        commandPermissions: sanitizeCommandPermissions(safeConfig.commandPermissions),
+    };
+};
 
 const memberHasRole = (member, roleIds) =>
     roleIds.some((roleId) => member.roles?.cache?.has(roleId));

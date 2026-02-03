@@ -8,90 +8,26 @@
     </head>
     <body>
         <div class="app">
-            <header class="app__header">
+            <header class="topbar">
                 <div>
-                    <p class="eyebrow">Discord Bot</p>
-                    <h1>Moderation Dashboard</h1>
-                    <p class="subhead">
-                        Manage permissions, review roles, and track warnings without leaving your browser.
-                    </p>
+                    <div class="badge">Discord Bot Dashboard</div>
+                    <h1>Manage your moderation settings</h1>
+                    <p class="muted">Configure permissions and warnings without touching JSON.</p>
                 </div>
-                <button class="button button--primary" id="loginButton">Log in with Discord</button>
+                <div class="button-row">
+                    <a class="button button--primary" href="/auth/discord" id="loginButton">Log in with Discord</a>
+                    <a class="button" href="/dashboard.html" id="dashboardButton" hidden>Open dashboard</a>
+                </div>
             </header>
 
-            <section class="card" id="sessionCard">
-                <div>
-                    <h2>Session</h2>
-                    <p id="sessionStatus">Checking your session...</p>
-                </div>
-                <button class="button button--ghost" id="logoutButton" hidden>Log out</button>
-            </section>
+            <div class="banner" id="banner"></div>
 
-            <section class="card" id="guildCard" hidden>
-                <div class="card__header">
-                    <div>
-                        <h2>Your guilds</h2>
-                        <p>Select a guild to manage permission overrides and warnings.</p>
-                    </div>
-                    <select id="guildSelect"></select>
+            <section class="panel">
+                <h2>Session status</h2>
+                <p class="muted" id="sessionStatus">Checking your session...</p>
+                <div class="button-row" style="margin-top: 16px;">
+                    <button class="button button--ghost" id="logoutButton" hidden>Log out</button>
                 </div>
-                <div class="card__content">
-                    <div class="columns">
-                        <div class="panel">
-                            <h3>Permission overrides</h3>
-                            <p class="muted">Update the JSON payload to configure command permissions.</p>
-                            <textarea id="permissionsEditor" spellcheck="false"></textarea>
-                            <button class="button button--primary" id="updatePermissionsButton">Save permissions</button>
-                        </div>
-                        <div class="panel">
-                            <h3>Roles</h3>
-                            <ul id="rolesList" class="list"></ul>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section class="card" id="warningsCard" hidden>
-                <div class="card__header">
-                    <div>
-                        <h2>Warnings</h2>
-                        <p>Review or add warnings for a specific user in the selected guild.</p>
-                    </div>
-                </div>
-                <div class="card__content">
-                    <div class="columns">
-                        <div class="panel">
-                            <h3>Lookup warnings</h3>
-                            <label class="field">
-                                <span>User ID</span>
-                                <input id="warningUserId" type="text" placeholder="123456789" />
-                            </label>
-                            <button class="button" id="loadWarningsButton">Load warnings</button>
-                            <ul id="warningsList" class="list"></ul>
-                        </div>
-                        <div class="panel">
-                            <h3>Add warning</h3>
-                            <label class="field">
-                                <span>User ID</span>
-                                <input id="newWarningUserId" type="text" placeholder="123456789" />
-                            </label>
-                            <label class="field">
-                                <span>Reason</span>
-                                <textarea id="warningReason" placeholder="Reason for warning"></textarea>
-                            </label>
-                            <button class="button button--primary" id="addWarningButton">Add warning</button>
-                            <p class="muted" id="warningResult"></p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section class="card">
-                <h2>Need help?</h2>
-                <p>
-                    The dashboard reads permissions from the MongoDB-backed overrides collection. Use it to grant
-                    command access to trusted members in each server.
-                </p>
             </section>
         </div>
 

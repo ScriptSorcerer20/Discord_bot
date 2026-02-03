@@ -40,7 +40,21 @@ const getWarnings = async ({ guildId, userId }) => {
     return record?.warnings ?? [];
 };
 
+const clearWarnings = async ({ guildId, userId }) => {
+    const collection = await getWarningsCollection();
+    const result = await collection.findOneAndUpdate(
+        { guildId, userId },
+        { $set: { warnings: [] } },
+        { returnDocument: 'after', upsert: true },
+    );
+
+    await updateStrikes({ guildId, userId, strikes: 0 });
+
+    return result.value?.warnings ?? [];
+};
+
 module.exports = {
     addWarning,
     getWarnings,
+    clearWarnings,
 };
