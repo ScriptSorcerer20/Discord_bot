@@ -25,6 +25,12 @@ module.exports = {
                 .setDescription('The reason of the mute')),
     category: 'Moderation',
     async execute(interaction) {
+        if (!interaction.guild) {
+            return interaction.reply({
+                content: 'This command can only be used inside a server.',
+                ephemeral: true,
+            });
+        }
         const target = interaction.options.getUser('target');
         const duration = interaction.options.getInteger('duration');
         const reason = interaction.options.getString('reason') || 'No reason provided';

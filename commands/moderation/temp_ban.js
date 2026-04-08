@@ -18,6 +18,8 @@ module.exports = {
             option
                 .setName('durationms')
                 .setDescription('Duration of the temporary ban (in milliseconds).')
+                .setMinValue(60_000)
+                .setMaxValue(2_592_000_000)
                 .setRequired(true))
         .addStringOption(option =>
             option
@@ -31,22 +33,40 @@ module.exports = {
             .setMinValue(0).setMaxValue(7)),
     category: 'Moderation',
     async execute(interaction) {
+        if (!interaction.guild) {
+            return interaction.reply({
+                content: 'This command can only be used inside a server.',
+                ephemeral: true,
+            });
+        }
         const user = interaction.options.getUser('target');
         const reason = interaction.options.getString('reason');
         const durationms = interaction.options.getInteger('durationms');
         const deleteMessages = interaction.options.getInteger('delete-messages');
 
-        // If you want to parse time like "1d", "10m", etc., use ms package:
-        let banUntil;
-        try {
-            banUntil = Date.now() + durationms;
-        } catch (e) {
-            // If parsing fails, handle error
+        if (user.bot) {
             return interaction.reply({
-                content: 'Invalid duration format. Please use something like "10m" or "1d".',
-                ephemeral: true
+                content: 'You cannot temp-ban a bot account.',
+                ephemeral: true,
             });
         }
+
+        if (user.id === interaction.user.id) {
+            return interaction.reply({
+                content: 'You cannot temp-ban yourself.',
+                ephemeral: true,
+            });
+        }
+
+        // If you want to parse time like "1d", "10m", etc., use ms package:
+        if (!Number.isFinite(durationms) || durationms <= 0) {
+            return interaction.reply({
+                content: 'Invalid duration. Provide a positive number of milliseconds.',
+                ephemeral: true,
+            });
+        }
+
+        const banUntil = Date.now() + durationms;
 
 
         // A function to send ephemeral messages

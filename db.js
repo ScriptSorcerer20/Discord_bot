@@ -1,11 +1,16 @@
-const {MongoClient, ServerApiVersion} = require('mongodb');
-const {mongodb} = require("./config.json");
+const { MongoClient, ServerApiVersion } = require('mongodb');
+const { getConfigValue } = require('./config');
 
 let dbClient;
 
 async function connectToDatabase() {
     if (!dbClient) {
-        dbClient = new MongoClient(mongodb, {
+        const mongodbUri = getConfigValue('MONGODB_URI', 'mongodb', 'mongodbUri');
+        if (!mongodbUri) {
+            throw new Error('Missing MongoDB connection string. Set MONGODB_URI or config.json mongodb.');
+        }
+
+        dbClient = new MongoClient(mongodbUri, {
             serverApi: {
                 version: ServerApiVersion.v1,
                 strict: true,

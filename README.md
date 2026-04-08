@@ -90,3 +90,15 @@ Example document stored in the `discord.guild_permissions` collection:
   }
 }
 ```
+
+---
+
+### **Configuration**
+Set secrets via environment variables, or copy `config.example.json` to `config.json` and fill in your own values.
+
+Recommended env vars:
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
+- `DISCORD_REDIRECT_URI`
+- `MONGODB_URI`

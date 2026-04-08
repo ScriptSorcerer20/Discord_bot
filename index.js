@@ -1,8 +1,16 @@
 const path = require('node:path');
 const { Client, Collection, GatewayIntentBits } = require('discord.js');
-const { token } = require('./config.json');
+const { getConfigValue } = require('./config');
 const { loadCommandModules } = require('./loaders/commands');
 const { loadEventModules } = require('./loaders/events');
+process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+});
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
@@ -24,6 +32,12 @@ for (const { event } of eventModules) {
     } else {
         client.on(event.name, (...args) => event.execute(...args));
     }
+}
+
+const token = getConfigValue('DISCORD_BOT_TOKEN', 'token', 'discordBotToken');
+if (!token) {
+    console.error('Missing Discord bot token. Set DISCORD_BOT_TOKEN or config.json token.');
+    process.exit(1);
 }
 
 client.login(token);

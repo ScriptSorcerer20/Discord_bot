@@ -40,21 +40,20 @@ module.exports = {
         }
 
         const senderId = interaction.user.id;
-        const senderData = await collection.findOne({ userID: senderId });
-        const senderBalance = senderData?.balance ?? 0;
+        const debitResult = await collection.findOneAndUpdate(
+            { userID: senderId, balance: { $gte: amount } },
+            { $inc: { balance: -amount } },
+            { returnDocument: 'after' }
+        );
 
-        if (senderBalance < amount) {
+        if (!debitResult.value) {
+            const senderData = await collection.findOne({ userID: senderId });
+            const senderBalance = senderData?.balance ?? 0;
             return interaction.reply({
                 content: `You only have **${senderBalance}** coins available.`,
                 ephemeral: true,
             });
         }
-
-        await collection.updateOne(
-            { userID: senderId },
-            { $inc: { balance: -amount } },
-            { upsert: true }
-        );
 
         await collection.updateOne(
             { userID: target.id },

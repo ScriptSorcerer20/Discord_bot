@@ -18,6 +18,12 @@ module.exports = {
                 .setDescription('The reason of the kick')),
     category: 'Moderation',
     async execute(interaction) {
+        if (!interaction.guild) {
+            return interaction.reply({
+                content: 'This command can only be used inside a server.',
+                ephemeral: true,
+            });
+        }
         const user = interaction.options.getUser('target');
         const reason = interaction.options.getString('reason') || 'No reason provided';
 

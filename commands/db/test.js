@@ -14,6 +14,12 @@ module.exports = {
     async execute(interaction) {
         const dbClient = await connectToDatabase();
         const message = interaction.options.getString('message');
+        if (message.length > 500) {
+            return interaction.reply({
+                content: 'Message must be 500 characters or fewer.',
+                ephemeral: true,
+            });
+        }
         const db = dbClient.db('discord');
         const collection = db.collection('test');
         await collection.insertOne({ userId: interaction.user.id, message: message });
