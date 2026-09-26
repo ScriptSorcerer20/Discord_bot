@@ -6,6 +6,7 @@ const express = require('express');
 const {addWarning, getWarnings, clearWarnings} = require('./services/warnings');
 const {getGuildPermissions, updateGuildPermissions} = require('./services/permissions');
 const { CONFIG_PATH, getConfig, getConfigValue } = require('./config');
+const { loadCommandModules } = require('./loaders/commands');
 const DEFAULT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_SESSION_CLEANUP_MS = 60 * 60 * 1000;
 const MAX_REASON_LENGTH = 500;
@@ -66,7 +67,6 @@ console.log('[oauth config]', {
 
 const DISCORD_API_BASE = 'https://discord.com/api';
 const DISCORD_OAUTH_BASE = 'https://discord.com/oauth2';
-const COMMANDS_PATH = path.join(__dirname, 'commands.json');
 const GUILD_CACHE_TTL_MS = 5 * 60 * 1000;
 const BOT_GUILD_CACHE_TTL_MS = 60 * 1000;
 const BOT_TOKEN_ERROR_MESSAGE = 'Missing Discord bot token.';
@@ -407,18 +407,34 @@ const isHttpsRequest = (req) => {
 };
 
 const loadCommands = () => {
-    if (!fs.existsSync(COMMANDS_PATH)) {
-        return [];
+    const commandsPath = path.join(__dirname, 'commands');
+    const { commands, duplicateCommands, invalidCommands, loadErrors } = loadCommandModules(commandsPath);
+
+    if (invalidCommands.length > 0) {
+        console.warn('Skipping invalid commands while building dashboard command list.', {
+            invalidCommands,
+        });
     }
 
-    try {
-        const raw = fs.readFileSync(COMMANDS_PATH, 'utf-8');
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed.filter((entry) => typeof entry === 'string') : [];
-    } catch (error) {
-        console.error('Failed to load commands.json', {message: error.message});
-        return [];
+    if (duplicateCommands.length > 0) {
+        console.error('Duplicate command definitions detected while building dashboard command list.', {
+            duplicateCommands,
+        });
     }
+
+    if (loadErrors.length > 0) {
+        console.error('Failed to load one or more commands for the dashboard.', {
+            loadErrors: loadErrors.map(({ filePath, error }) => ({
+                filePath,
+                message: error.message,
+            })),
+        });
+    }
+
+    return commands
+        .filter((command) => command.permissionGroup === 'moderation')
+        .map((command) => command.data.name)
+        .sort((left, right) => left.localeCompare(right));
 };
 
 const canManageGuild = (guild) => {
