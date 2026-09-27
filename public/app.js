@@ -121,7 +121,7 @@ const initIndexPage = async () => {
     try {
         const data = await fetchJson('/api/me');
         setCsrfToken(data.csrfToken);
-        sessionStatus.textContent = `Signed in as ${formatUserDisplay(data.user)}.`;
+        sessionStatus.textContent = formatUserDisplay(data.user);
         loginButton.hidden = true;
         dashboardButton.hidden = false;
         logoutButton.hidden = false;
@@ -130,26 +130,27 @@ const initIndexPage = async () => {
             banner.style.display = 'none';
         }
     } catch (error) {
-        sessionStatus.textContent = 'You are not signed in yet.';
+        sessionStatus.textContent = '';
         loginButton.hidden = false;
         dashboardButton.hidden = true;
         logoutButton.hidden = true;
         if (banner) {
-            banner.textContent = 'Log in with Discord to access the dashboard.';
-            banner.style.display = 'block';
+            const sessionExpired = error.status === 401 || error.status === 403;
+            banner.textContent = sessionExpired ? '' : 'Unable to check your session. Try again.';
+            banner.style.display = sessionExpired ? 'none' : 'block';
         }
     }
 
     logoutButton?.addEventListener('click', async () => {
         try {
-            await fetch('/auth/logout', {
+            await fetchJson('/auth/logout', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     ...(csrfToken ? {'X-CSRF-Token': csrfToken} : {}),
                 },
             });
-            sessionStatus.textContent = 'Logged out successfully.';
+            sessionStatus.textContent = '';
             loginButton.hidden = false;
             dashboardButton.hidden = true;
             logoutButton.hidden = true;

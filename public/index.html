@@ -1,36 +1,53 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Discord Bot Dashboard</title>
-        <link rel="stylesheet" href="styles.css" />
-    </head>
-    <body>
-        <div class="app">
-            <header class="topbar">
-                <div>
-                    <div class="badge">Discord Bot Dashboard</div>
-                    <h1>Manage your moderation settings</h1>
-                    <p class="muted">Configure permissions and warnings without touching JSON.</p>
-                </div>
-                <div class="button-row">
-                    <a class="button button--primary" href="/auth/discord" id="loginButton">Log in with Discord</a>
-                    <a class="button" href="/dashboard.html" id="dashboardButton" hidden>Open dashboard</a>
-                </div>
-            </header>
-
-            <div class="banner" id="banner"></div>
-
-            <section class="panel">
-                <h2>Session status</h2>
-                <p class="muted" id="sessionStatus">Checking your session...</p>
-                <div class="button-row" style="margin-top: 16px;">
-                    <button class="button button--ghost" id="logoutButton" hidden>Log out</button>
-                </div>
-            </section>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#302224" />
+    <title>The Steward</title>
+    <link rel="icon" href="mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="landing-body">
+    <div class="landing-shell">
+      <header class="landing-nav">
+        <a class="brand" href="/" aria-label="The Steward home"
+          ><img src="mark.svg" alt="" /><span
+            ><small>THE</small>Steward<span class="brand-period">.</span></span
+          ></a
+        >
+      </header>
+      <main class="landing-main">
+        <div class="landing-copy">
+          <h1>Welcome.</h1>
+          <p class="landing-description">Manage your Discord servers.</p>
+          <div class="button-row">
+            <a
+              class="button button--primary"
+              href="/auth/discord"
+              id="loginButton"
+              ><svg><use href="icons.svg#discord" /></svg>Sign in with Discord
+              <span>↗</span></a
+            >
+            <a
+              class="button button--dark"
+              href="/dashboard.html"
+              id="dashboardButton"
+              hidden
+              >Open dashboard <span>↗</span></a
+            >
+          </div>
+          <div class="landing-session">
+            <span id="sessionStatus">Checking session…</span
+            ><button class="text-link" id="logoutButton" hidden>Log out</button>
+          </div>
+          <div class="banner" id="banner" role="status"></div>
         </div>
-
-        <script src="app.js"></script>
-    </body>
+        <div class="landing-art">
+          <img src="concierge.svg" alt="Brass service bell" />
+        </div>
+      </main>
+    </div>
+    <script src="app.js"></script>
+  </body>
 </html>
