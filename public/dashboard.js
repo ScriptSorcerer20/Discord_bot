@@ -580,6 +580,7 @@ const updateBotStatusControls = () => {
 const loadSession = async () => {
     const data = await fetchDashboardJson('/api/me');
     elements.userDisplay.textContent = dashboardApi.formatUserDisplay(data.user);
+    dashboardApi.setCsrfToken(data.csrfToken);
     if (data.expiresAt) {
         const expires = new Date(data.expiresAt);
         elements.sessionExpiry.textContent = `Session expires ${expires.toLocaleString()}`;
@@ -993,7 +994,13 @@ const initDashboard = async () => {
     }
 
     elements.logoutButton.addEventListener('click', async () => {
-        await fetch('/auth/logout', {method: 'POST', credentials: 'include'});
+        await fetch('/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                ...(dashboardApi.getCsrfToken() ? {'X-CSRF-Token': dashboardApi.getCsrfToken()} : {}),
+            },
+        });
         window.location.href = '/';
     });
 

@@ -48,6 +48,9 @@ module.exports = {
                         .setRequired(true))),
     category: 'Moderation',
     async execute(interaction) {
+        if (!interaction.guild) {
+            return interaction.reply({ content: 'This command can only be used inside a server.', ephemeral: true });
+        }
         const target = interaction.options.getUser('target');
         const role = interaction.options.getRole('role');
         const action = interaction.options.getSubcommand();

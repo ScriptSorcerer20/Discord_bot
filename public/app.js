@@ -14,11 +14,21 @@ const createFetchError = async (response) => {
     return error;
 };
 
+let csrfToken = null;
+
+const setCsrfToken = (token) => {
+    csrfToken = typeof token === 'string' ? token : null;
+};
+
+const getCsrfToken = () => csrfToken;
+
 const fetchJson = async (url, options = {}) => {
+    const method = (options.method || 'GET').toUpperCase();
     const response = await fetch(url, {
         credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
+            ...(csrfToken && method !== 'GET' && method !== 'HEAD' ? {'X-CSRF-Token': csrfToken} : {}),
             ...(options.headers || {}),
         },
         ...options,
@@ -110,6 +120,7 @@ const initIndexPage = async () => {
 
     try {
         const data = await fetchJson('/api/me');
+        setCsrfToken(data.csrfToken);
         sessionStatus.textContent = `Signed in as ${formatUserDisplay(data.user)}.`;
         loginButton.hidden = true;
         dashboardButton.hidden = false;
@@ -131,7 +142,13 @@ const initIndexPage = async () => {
 
     logoutButton?.addEventListener('click', async () => {
         try {
-            await fetch('/auth/logout', {method: 'POST', credentials: 'include'});
+            await fetch('/auth/logout', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    ...(csrfToken ? {'X-CSRF-Token': csrfToken} : {}),
+                },
+            });
             sessionStatus.textContent = 'Logged out successfully.';
             loginButton.hidden = false;
             dashboardButton.hidden = true;
@@ -151,6 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.dashboardApi = {
     fetchJson,
+    setCsrfToken,
+    getCsrfToken,
     showToast,
     setErrorBanner,
     clearErrorBanner,

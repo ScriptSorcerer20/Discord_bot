@@ -7,7 +7,7 @@ module.exports = {
     category: 'Utility',
     async execute(interaction) {
         const commandDetails = interaction.client.commands
-            .map(cmd => ({
+            .map((cmd) => ({
                 name: cmd.data.name,
                 description: cmd.data.description,
                 category: cmd.category ?? 'Other',
@@ -26,7 +26,7 @@ module.exports = {
             .map((category) => ({
                 name: category,
                 value: grouped[category]
-                    .map(command => `• **/${command.name}** — ${command.description}`)
+                    .map((command) => `- **/${command.name}**: ${command.description}`)
                     .join('\n'),
             }));
 

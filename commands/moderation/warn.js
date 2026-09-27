@@ -4,6 +4,8 @@ const { getGuildSettings } = require('../../services/guildSettings');
 const { recordModerationAction } = require('../../services/moderationRecords');
 const { connectToDatabase } = require('../../db');
 
+const MAX_REASON_LENGTH = 500;
+
 module.exports = {
     permissionGroup: 'moderation',
     data: new SlashCommandBuilder()
@@ -28,6 +30,12 @@ module.exports = {
         if (!interaction.guildId) {
             return interaction.reply({
                 content: 'Warnings can only be issued inside a server.',
+                ephemeral: true,
+            });
+        }
+        if (reason.length > MAX_REASON_LENGTH) {
+            return interaction.reply({
+                content: `Reason must be ${MAX_REASON_LENGTH} characters or fewer.`,
                 ephemeral: true,
             });
         }

@@ -88,7 +88,7 @@
                         </div>
                         <div class="callout" id="botInactiveCallout" hidden>
                             <strong>Bot not added yet.</strong>
-                            <p class="muted">The bot isn’t in this server yet. Invite it to configure settings.</p>
+                            <p class="muted">The bot is not in this server yet. Invite it to configure settings.</p>
                             <p class="muted">You can review saved settings, but changes will stay inactive until the bot joins.</p>
                         </div>
                         <div class="field">
@@ -115,13 +115,53 @@
                         <div class="panel__header panel__header--split">
                             <div>
                                 <h2>Command permissions</h2>
-                                <p class="muted">Restrict commands to roles or specific users.</p>
+                                <p class="muted">Review and edit restrictions faster with search, filters, and live summaries.</p>
                             </div>
                             <div class="button-row">
                                 <button class="button button--ghost" id="clearAllCommands">Clear all restrictions</button>
                                 <button class="button" id="copyFromGuild">Copy from another guild</button>
                             </div>
                         </div>
+
+                        <div class="stats-grid">
+                            <article class="stat-card">
+                                <span class="stat-card__label">Commands</span>
+                                <strong class="stat-card__value" id="permissionTotalCount">0</strong>
+                                <span class="muted">Available moderation commands</span>
+                            </article>
+                            <article class="stat-card">
+                                <span class="stat-card__label">Restricted</span>
+                                <strong class="stat-card__value" id="permissionRestrictedCount">0</strong>
+                                <span class="muted">Commands limited to specific roles or users</span>
+                            </article>
+                            <article class="stat-card">
+                                <span class="stat-card__label">Open</span>
+                                <strong class="stat-card__value" id="permissionOpenCount">0</strong>
+                                <span class="muted">Commands currently available to everyone</span>
+                            </article>
+                            <article class="stat-card">
+                                <span class="stat-card__label">Unsaved edits</span>
+                                <strong class="stat-card__value" id="permissionChangedCount">0</strong>
+                                <span class="muted">Cards changed since the last save</span>
+                            </article>
+                        </div>
+
+                        <div class="toolbar">
+                            <div class="field toolbar__field">
+                                <label for="commandSearch">Find command</label>
+                                <input type="search" id="commandSearch" placeholder="Search by command name" />
+                            </div>
+                            <div class="field toolbar__field">
+                                <label for="commandFilter">Show</label>
+                                <select id="commandFilter">
+                                    <option value="all">All commands</option>
+                                    <option value="restricted">Restricted only</option>
+                                    <option value="open">Open only</option>
+                                    <option value="changed">Changed only</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div class="field">
                             <span>
                                 Add command
@@ -132,48 +172,78 @@
                                 <button class="button" id="addCommandButton">Add</button>
                             </div>
                         </div>
+
                         <div class="command-list" id="commandsList"></div>
                         <div class="empty-state" id="commandsEmpty" hidden>
-                            No commands configured yet. Add one or invite the bot to sync commands.
+                            No commands match the current filter. Try clearing the search or add a custom command override.
                         </div>
                     </section>
 
                     <section class="panel" id="warningsPanel" hidden>
                         <div class="warnings-layout">
                             <div class="warnings-pane">
-                                <h2>User lookup</h2>
-                                <p class="muted">Search members or paste an ID.</p>
+                                <div class="panel__header">
+                                    <div>
+                                        <h2>User lookup</h2>
+                                        <p class="muted">Search members or paste an ID, then manage all warnings from one target card.</p>
+                                    </div>
+                                </div>
                                 <div class="field">
                                     <label for="warningsUserSearch">Find member</label>
-                                    <input type="search" id="warningsUserSearch" placeholder="Type a username" />
+                                    <input type="search" id="warningsUserSearch" placeholder="Type at least 2 characters" />
+                                    <span class="muted" id="warningsSearchStatus">Start typing to search this guild.</span>
                                 </div>
                                 <div class="member-list" id="warningsUserResults"></div>
-                                <p class="muted" id="warningsSelectedUser">No user selected.</p>
                                 <div class="field">
-                                    <label for="warningsUserInput">User ID</label>
+                                    <label for="warningsUserInput">Manual user ID</label>
                                     <input type="text" id="warningsUserInput" placeholder="123456789" />
                                 </div>
+                                <div class="selected-user-card" id="warningsSelectedCard">
+                                    <span class="selected-user-card__label">Current target</span>
+                                    <strong id="warningsSelectedUser">No user selected.</strong>
+                                    <span class="muted" id="warningsSelectedHint">Pick a member from search results or paste a Discord user ID.</span>
+                                </div>
                                 <div class="button-row">
-                                    <button class="button" id="fetchWarningsButton">Fetch warnings</button>
+                                    <button class="button" id="fetchWarningsButton">Load history</button>
                                     <button class="button button--ghost" id="clearWarningsButton">Clear warnings</button>
                                 </div>
                                 <div class="spinner" id="warningsSpinner" hidden></div>
                             </div>
+
                             <div class="warnings-pane">
-                                <h2>Warnings</h2>
-                                <div class="empty-state" id="warningsEmpty" hidden>No warnings found.</div>
+                                <div class="panel__header panel__header--split">
+                                    <div>
+                                        <h2>Warnings</h2>
+                                        <p class="muted">See warning history and add new entries for the selected target.</p>
+                                    </div>
+                                    <div class="warning-status-pill" id="warningsHistoryState">No history loaded</div>
+                                </div>
+
+                                <div class="stats-grid stats-grid--compact">
+                                    <article class="stat-card stat-card--compact">
+                                        <span class="stat-card__label">Total warnings</span>
+                                        <strong class="stat-card__value" id="warningsTotalCount">0</strong>
+                                    </article>
+                                    <article class="stat-card stat-card--compact">
+                                        <span class="stat-card__label">Latest warning</span>
+                                        <strong class="stat-card__value stat-card__value--small" id="warningsLatestDate">None</strong>
+                                    </article>
+                                </div>
+
+                                <div class="empty-state" id="warningsEmpty" hidden>No warnings found for this user.</div>
                                 <ul id="warningsList"></ul>
                                 <div class="divider"></div>
                                 <h3>Add warning</h3>
-                                <div class="field">
-                                    <label for="newWarningUserInput">User ID</label>
-                                    <input type="text" id="newWarningUserInput" placeholder="123456789" />
-                                </div>
+                                <p class="muted">The warning will be added to the currently selected target.</p>
                                 <div class="field">
                                     <label for="warningReasonInput">Reason</label>
-                                    <textarea id="warningReasonInput" placeholder="Reason for warning" maxlength="200"></textarea>
+                                    <textarea
+                                        id="warningReasonInput"
+                                        placeholder="Describe what happened and why the warning is being issued."
+                                        maxlength="500"
+                                    ></textarea>
                                     <div class="field__meta">
-                                        <span class="muted" id="warningCharCount">0/200</span>
+                                        <span class="muted" id="warningCharCount">0/500</span>
                                         <span class="muted" id="warningStatus"></span>
                                     </div>
                                 </div>

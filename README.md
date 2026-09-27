@@ -16,6 +16,7 @@ Im going to make a To-do List for the features i want to implement for my Bot.
 
 3. **Moderation Tools**
    - [x] Add commands to mute, kick, and temp_ban users.
+   - [x] Add `/ban-role` to ban members with a selected role after confirmation.
    - [ ] Create an auto-moderation feature to delete spam or inappropriate content.
    - [x] Implement a warning system with a strike counter.
 
@@ -90,3 +91,36 @@ Example document stored in the `discord.guild_permissions` collection:
   }
 }
 ```
+
+---
+
+### **Configuration**
+Set secrets via environment variables, or copy `config.example.json` to `config.json` and fill in your own values.
+
+Recommended env vars:
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
+- `DISCORD_REDIRECT_URI`
+- `MONGODB_URI`
+
+### **Banning members by role**
+
+Use `/ban-role role:@Role reason:Reason for the bans`. The bot privately previews the
+number of eligible members and asks you to confirm within 60 seconds. Bans are permanent
+and existing messages are kept. Both you and the bot need **Ban Members** permission.
+The command skips you, the server owner, the bot itself, and members whose highest role
+is equal to or above yours or the bot's (the server owner bypasses their own hierarchy check).
+`@everyone` cannot be selected. Only members included in the preview can be banned;
+their role membership and hierarchy are checked again before each ban.
+
+Enable **Server Members Intent** under **Bot > Privileged Gateway Intents** in the
+[Discord Developer Portal](https://discord.com/developers/applications) so the bot can
+[list all guild members](https://docs.discord.com/developers/resources/guild#list-guild-members).
+Member discovery uses paginated REST requests, so no Gateway intent change is needed in `index.js`.
+Run `npm run deploy:commands` and restart the bot after installing the command.
+
+The result reports successful bans, skipped members, failed requests, and any moderation
+record failures separately. Long batches stop after about 14 minutes and report how many
+members remain; run the command again to preview and continue. `/ban-role` also appears
+automatically in `/help` and the dashboard's moderation permission settings.

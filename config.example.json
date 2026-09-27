@@ -1,0 +1,11 @@
+{
+  "token": "YOUR_DISCORD_BOT_TOKEN",
+  "clientId": "YOUR_DISCORD_CLIENT_ID",
+  "clientSecret": "YOUR_DISCORD_CLIENT_SECRET",
+  "mongodb": "mongodb://127.0.0.1:27017/botdb",
+  "redirectUri": "http://localhost:3000/auth/discord/callback",
+  "dashboardInvitePermissions": "0",
+  "dashboardSessionTtlMs": "86400000",
+  "dashboardClientUrl": "http://localhost:3000",
+  "trustProxy": false
+}
