@@ -1,287 +1,407 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Discord Bot Dashboard</title>
-        <link rel="stylesheet" href="styles.css" />
-    </head>
-    <body>
-        <div class="app-shell">
-            <header class="navbar">
-                <div class="navbar__brand">
-                    <div class="brand-mark">DB</div>
-                    <div>
-                        <p class="muted">Discord Bot Dashboard</p>
-                        <strong id="userDisplay">Loading session...</strong>
-                        <p class="muted" id="sessionExpiry"></p>
-                    </div>
-                </div>
-                <div class="navbar__actions">
-                    <a class="button button--ghost" href="/">Home</a>
-                    <button class="button button--primary" id="logoutButton">Log out</button>
-                </div>
-            </header>
-
-            <div class="error-banner" id="errorBanner" hidden>
-                <div>
-                    <strong>Something went wrong.</strong>
-                    <p data-role="error-message"></p>
-                </div>
-                <button class="button button--ghost" data-role="error-copy">Copy error details</button>
-            </div>
-
-            <div class="toast-container" id="toastContainer"></div>
-
-            <div class="layout">
-                <aside class="sidebar">
-                    <div class="sidebar__header">
-                        <div>
-                            <h2>Guilds</h2>
-                            <p class="muted">Pick a server to manage.</p>
-                        </div>
-                        <input type="search" id="guildSearch" placeholder="Search guilds" />
-                    </div>
-
-                    <div class="guild-list" id="guildList"></div>
-                    <div class="skeleton-list" id="guildListSkeleton" hidden>
-                        <div class="skeleton-line"></div>
-                        <div class="skeleton-line"></div>
-                        <div class="skeleton-line"></div>
-                        <div class="skeleton-line"></div>
-                    </div>
-                    <div class="empty-state" id="guildEmpty" hidden>
-                        No manageable guilds found. Make sure you have Manage Server permissions.
-                    </div>
-                </aside>
-
-                <main class="content">
-                    <section class="guild-header">
-                        <div class="guild-header__info">
-                            <img id="guildHeaderIcon" alt="" />
-                            <div>
-                                <h1 id="guildHeaderName">Select a guild</h1>
-                                <div class="guild-header__status">
-                                    <span class="status-badge" id="guildStatusBadge"></span>
-                                    <span class="muted" id="guildStatusNote"></span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="guild-header__actions">
-                            <button class="button button--primary" id="inviteButton" hidden>Invite bot</button>
-                            <button class="button button--ghost" id="refreshBotButton" hidden>Refresh status</button>
-                        </div>
-                    </section>
-
-                    <div class="tabs">
-                        <button class="tab active" data-tab="settings">Settings</button>
-                        <button class="tab" data-tab="permissions">Permissions</button>
-                        <button class="tab" data-tab="warnings">Warnings</button>
-                    </div>
-
-                    <section class="panel" id="settingsPanel">
-                        <div class="panel__header">
-                            <div>
-                                <h2>Admin access</h2>
-                                <p class="muted">Control who can edit bot configuration and permissions.</p>
-                            </div>
-                        </div>
-                        <div class="callout" id="botInactiveCallout" hidden>
-                            <strong>Bot not added yet.</strong>
-                            <p class="muted">The bot is not in this server yet. Invite it to configure settings.</p>
-                            <p class="muted">You can review saved settings, but changes will stay inactive until the bot joins.</p>
-                        </div>
-                        <div class="field">
-                            <span>
-                                Admin roles
-                                <span class="tooltip" title="Members with these roles can edit dashboard settings.">?</span>
-                            </span>
-                            <div id="adminRolesPicker"></div>
-                        </div>
-                        <div class="field">
-                            <span>
-                                Admin user IDs
-                                <span class="tooltip" title="Paste one or more user IDs separated by commas or spaces.">?</span>
-                            </span>
-                            <div class="input-row">
-                                <input type="text" id="adminUserInput" placeholder="Paste user IDs" />
-                                <button class="button" id="addAdminUserButton">Add</button>
-                            </div>
-                            <div class="chip-list" id="adminUserChips"></div>
-                        </div>
-                    </section>
-
-                    <section class="panel" id="permissionsPanel" hidden>
-                        <div class="panel__header panel__header--split">
-                            <div>
-                                <h2>Command permissions</h2>
-                                <p class="muted">Review and edit restrictions faster with search, filters, and live summaries.</p>
-                            </div>
-                            <div class="button-row">
-                                <button class="button button--ghost" id="clearAllCommands">Clear all restrictions</button>
-                                <button class="button" id="copyFromGuild">Copy from another guild</button>
-                            </div>
-                        </div>
-
-                        <div class="stats-grid">
-                            <article class="stat-card">
-                                <span class="stat-card__label">Commands</span>
-                                <strong class="stat-card__value" id="permissionTotalCount">0</strong>
-                                <span class="muted">Available moderation commands</span>
-                            </article>
-                            <article class="stat-card">
-                                <span class="stat-card__label">Restricted</span>
-                                <strong class="stat-card__value" id="permissionRestrictedCount">0</strong>
-                                <span class="muted">Commands limited to specific roles or users</span>
-                            </article>
-                            <article class="stat-card">
-                                <span class="stat-card__label">Open</span>
-                                <strong class="stat-card__value" id="permissionOpenCount">0</strong>
-                                <span class="muted">Commands currently available to everyone</span>
-                            </article>
-                            <article class="stat-card">
-                                <span class="stat-card__label">Unsaved edits</span>
-                                <strong class="stat-card__value" id="permissionChangedCount">0</strong>
-                                <span class="muted">Cards changed since the last save</span>
-                            </article>
-                        </div>
-
-                        <div class="toolbar">
-                            <div class="field toolbar__field">
-                                <label for="commandSearch">Find command</label>
-                                <input type="search" id="commandSearch" placeholder="Search by command name" />
-                            </div>
-                            <div class="field toolbar__field">
-                                <label for="commandFilter">Show</label>
-                                <select id="commandFilter">
-                                    <option value="all">All commands</option>
-                                    <option value="restricted">Restricted only</option>
-                                    <option value="open">Open only</option>
-                                    <option value="changed">Changed only</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="field">
-                            <span>
-                                Add command
-                                <span class="tooltip" title="Create new command overrides for custom commands.">?</span>
-                            </span>
-                            <div class="input-row">
-                                <input type="text" id="newCommandInput" placeholder="command-name" />
-                                <button class="button" id="addCommandButton">Add</button>
-                            </div>
-                        </div>
-
-                        <div class="command-list" id="commandsList"></div>
-                        <div class="empty-state" id="commandsEmpty" hidden>
-                            No commands match the current filter. Try clearing the search or add a custom command override.
-                        </div>
-                    </section>
-
-                    <section class="panel" id="warningsPanel" hidden>
-                        <div class="warnings-layout">
-                            <div class="warnings-pane">
-                                <div class="panel__header">
-                                    <div>
-                                        <h2>User lookup</h2>
-                                        <p class="muted">Search members or paste an ID, then manage all warnings from one target card.</p>
-                                    </div>
-                                </div>
-                                <div class="field">
-                                    <label for="warningsUserSearch">Find member</label>
-                                    <input type="search" id="warningsUserSearch" placeholder="Type at least 2 characters" />
-                                    <span class="muted" id="warningsSearchStatus">Start typing to search this guild.</span>
-                                </div>
-                                <div class="member-list" id="warningsUserResults"></div>
-                                <div class="field">
-                                    <label for="warningsUserInput">Manual user ID</label>
-                                    <input type="text" id="warningsUserInput" placeholder="123456789" />
-                                </div>
-                                <div class="selected-user-card" id="warningsSelectedCard">
-                                    <span class="selected-user-card__label">Current target</span>
-                                    <strong id="warningsSelectedUser">No user selected.</strong>
-                                    <span class="muted" id="warningsSelectedHint">Pick a member from search results or paste a Discord user ID.</span>
-                                </div>
-                                <div class="button-row">
-                                    <button class="button" id="fetchWarningsButton">Load history</button>
-                                    <button class="button button--ghost" id="clearWarningsButton">Clear warnings</button>
-                                </div>
-                                <div class="spinner" id="warningsSpinner" hidden></div>
-                            </div>
-
-                            <div class="warnings-pane">
-                                <div class="panel__header panel__header--split">
-                                    <div>
-                                        <h2>Warnings</h2>
-                                        <p class="muted">See warning history and add new entries for the selected target.</p>
-                                    </div>
-                                    <div class="warning-status-pill" id="warningsHistoryState">No history loaded</div>
-                                </div>
-
-                                <div class="stats-grid stats-grid--compact">
-                                    <article class="stat-card stat-card--compact">
-                                        <span class="stat-card__label">Total warnings</span>
-                                        <strong class="stat-card__value" id="warningsTotalCount">0</strong>
-                                    </article>
-                                    <article class="stat-card stat-card--compact">
-                                        <span class="stat-card__label">Latest warning</span>
-                                        <strong class="stat-card__value stat-card__value--small" id="warningsLatestDate">None</strong>
-                                    </article>
-                                </div>
-
-                                <div class="empty-state" id="warningsEmpty" hidden>No warnings found for this user.</div>
-                                <ul id="warningsList"></ul>
-                                <div class="divider"></div>
-                                <h3>Add warning</h3>
-                                <p class="muted">The warning will be added to the currently selected target.</p>
-                                <div class="field">
-                                    <label for="warningReasonInput">Reason</label>
-                                    <textarea
-                                        id="warningReasonInput"
-                                        placeholder="Describe what happened and why the warning is being issued."
-                                        maxlength="500"
-                                    ></textarea>
-                                    <div class="field__meta">
-                                        <span class="muted" id="warningCharCount">0/500</span>
-                                        <span class="muted" id="warningStatus"></span>
-                                    </div>
-                                </div>
-                                <button class="button button--primary" id="addWarningButton">Add warning</button>
-                            </div>
-                        </div>
-                    </section>
-
-                    <div class="save-bar" id="saveBar" hidden>
-                        <span class="save-indicator" id="dirtyIndicator">Unsaved changes</span>
-                        <div class="button-row">
-                            <button class="button button--ghost" id="discardChangesButton">Discard</button>
-                            <button class="button button--primary" id="savePermissionsButton">Save changes</button>
-                        </div>
-                    </div>
-
-                    <div class="panel skeleton-panel" id="contentSkeleton" hidden>
-                        <div class="skeleton-line"></div>
-                        <div class="skeleton-line"></div>
-                        <div class="skeleton-line"></div>
-                    </div>
-                </main>
-            </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#302224" />
+    <title>Overview · The Steward</title>
+    <link rel="icon" href="mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#mainContent">Skip to content</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Dashboard navigation">
+        <a class="brand" href="/" aria-label="The Steward home">
+          <img src="mark.svg" alt="" />
+          <span
+            ><small>THE</small>Steward<span class="brand-period">.</span></span
+          >
+        </a>
+        <nav class="tabs" aria-label="Server management">
+          <button class="tab active" data-tab="settings" aria-current="page">
+            <svg><use href="icons.svg#grid" /></svg>Overview
+          </button>
+          <button class="tab" data-tab="permissions">
+            <svg><use href="icons.svg#key" /></svg>Permissions
+            <span class="nav-count" id="navCommandCount">–</span>
+          </button>
+          <button class="tab" data-tab="warnings">
+            <svg><use href="icons.svg#shield" /></svg>Warnings
+          </button>
+        </nav>
+        <div class="sidebar__section-label server-label">
+          SERVERS <span id="guildCount">–</span>
         </div>
-
-        <div class="modal" id="copyModal" hidden>
-            <div class="modal__content">
-                <h3>Copy permissions</h3>
-                <p class="muted">Select another guild to copy permissions from.</p>
-                <select id="copyGuildSelect"></select>
-                <div class="button-row">
-                    <button class="button button--ghost" id="cancelCopyButton">Cancel</button>
-                    <button class="button button--primary" id="confirmCopyButton">Copy</button>
-                </div>
-            </div>
+        <div class="search-field sidebar-search">
+          <svg><use href="icons.svg#search" /></svg>
+          <input
+            type="search"
+            id="guildSearch"
+            aria-label="Search servers"
+            placeholder="Search servers"
+          />
         </div>
-
-        <script src="app.js"></script>
-        <script src="dashboard.js"></script>
-    </body>
+        <div class="guild-list" id="guildList"></div>
+        <div class="skeleton-list" id="guildListSkeleton" hidden>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line"></div>
+        </div>
+        <div class="empty-state" id="guildEmpty" hidden>
+          No servers available.
+        </div>
+        <div class="sidebar-bottom">
+          <div class="profile">
+            <div class="profile-avatar" id="userInitial">S</div>
+            <div class="profile__text">
+              <strong id="userDisplay">Loading…</strong
+              ><span id="sessionExpiry">Discord account</span>
+            </div>
+            <button
+              class="icon-button"
+              id="logoutButton"
+              aria-label="Log out"
+              title="Log out"
+            >
+              <svg><use href="icons.svg#logout" /></svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar">
+          <div class="breadcrumb">
+            Dashboard <span>/</span><strong id="currentPage">Overview</strong>
+          </div>
+          <a class="icon-button" href="/" aria-label="Home" title="Home"
+            ><svg><use href="icons.svg#home" /></svg
+          ></a>
+        </header>
+        <main class="content" id="mainContent" tabindex="-1">
+          <div class="error-banner" id="errorBanner" role="alert" hidden>
+            <p data-role="error-message"></p>
+            <button class="button button--ghost" data-role="error-copy">
+              Copy details
+            </button>
+          </div>
+          <section class="page-heading">
+            <h1 id="pageTitle">Overview</h1>
+            <div class="guild-header">
+              <span class="guild-avatar" id="guildHeaderFallback">S</span
+              ><img id="guildHeaderIcon" alt="" hidden /><strong
+                id="guildHeaderName"
+                >Select a server</strong
+              >
+            </div>
+          </section>
+          <section
+            class="overview-stats"
+            id="overviewStats"
+            aria-label="Server summary"
+          >
+            <article class="overview-stat">
+              <div class="stat-heading">
+                <span>Bot status</span
+                ><button
+                  class="icon-button"
+                  id="refreshBotButton"
+                  aria-label="Refresh bot status"
+                  title="Refresh bot status"
+                  hidden
+                >
+                  ↻
+                </button>
+              </div>
+              <strong
+                class="stat-value stat-value--status"
+                id="overviewBotStatus"
+                >–</strong
+              >
+            </article>
+            <article class="overview-stat">
+              <div class="stat-heading">
+                <button class="text-link" data-open-tab="permissions">
+                  Commands ↗</button
+                ><svg><use href="icons.svg#terminal" /></svg>
+              </div>
+              <strong class="stat-value" id="overviewCommandCount">–</strong>
+            </article>
+            <article class="overview-stat">
+              <div class="stat-heading">
+                <span>Admin roles</span
+                ><svg><use href="icons.svg#users" /></svg>
+              </div>
+              <strong class="stat-value" id="overviewRoleCount">–</strong>
+            </article>
+            <article class="overview-stat">
+              <div class="stat-heading">
+                <span>Restricted commands</span
+                ><svg><use href="icons.svg#key" /></svg>
+              </div>
+              <strong class="stat-value" id="overviewRestrictedCount">–</strong>
+            </article>
+          </section>
+          <div class="callout" id="botInactiveCallout" hidden>
+            <svg><use href="icons.svg#info" /></svg>
+            <p>Invite the bot to edit settings.</p>
+            <button class="button button--primary" id="inviteButton" hidden>
+              Invite bot ↗
+            </button>
+          </div>
+          <div class="empty-state panel" id="workspaceEmpty" hidden>
+            Select a server to get started.
+          </div>
+          <section
+            class="settings-layout"
+            id="settingsPanel"
+            aria-labelledby="adminTitle"
+            hidden
+          >
+            <div class="panel admin-panel">
+              <div class="panel__header">
+                <div class="section-title">
+                  <span class="section-icon"
+                    ><svg><use href="icons.svg#users" /></svg
+                  ></span>
+                  <h2 id="adminTitle">Admin access</h2>
+                </div>
+              </div>
+              <div class="admin-fields">
+                <div class="field">
+                  <span id="adminRolesLabel">Roles</span>
+                  <div id="adminRolesPicker"></div>
+                </div>
+                <div class="field">
+                  <label for="adminUserInput">Members</label>
+                  <div class="input-row">
+                    <input
+                      type="text"
+                      id="adminUserInput"
+                      placeholder="Discord user IDs, comma-separated"
+                    /><button
+                      class="button button--soft"
+                      id="addAdminUserButton"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div class="chip-list" id="adminUserChips"></div>
+                </div>
+              </div>
+              <div class="panel-footnote">
+                <svg><use href="icons.svg#info" /></svg>Admins bypass command
+                restrictions.
+              </div>
+            </div>
+          </section>
+          <section
+            class="panel"
+            id="permissionsPanel"
+            aria-labelledby="permissionsTitle"
+            hidden
+          >
+            <div class="panel__header panel__header--split">
+              <h2 id="permissionsTitle">Commands</h2>
+              <div class="button-row">
+                <button class="button button--ghost" id="clearAllCommands">
+                  Reset restrictions</button
+                ><button class="button" id="copyFromGuild">
+                  <svg><use href="icons.svg#copy" /></svg>Copy from server
+                </button>
+              </div>
+            </div>
+            <div class="stats-grid">
+              <article class="stat-card">
+                <span>Total</span><strong id="permissionTotalCount">0</strong>
+              </article>
+              <article class="stat-card">
+                <span>Restricted</span
+                ><strong id="permissionRestrictedCount">0</strong>
+              </article>
+              <article class="stat-card">
+                <span>Default access</span
+                ><strong id="permissionOpenCount">0</strong>
+              </article>
+              <article class="stat-card">
+                <span>Unsaved</span
+                ><strong id="permissionChangedCount">0</strong>
+              </article>
+            </div>
+            <div class="toolbar">
+              <div class="search-field">
+                <svg><use href="icons.svg#search" /></svg
+                ><input
+                  type="search"
+                  id="commandSearch"
+                  aria-label="Search commands"
+                  placeholder="Search commands"
+                />
+              </div>
+              <select id="commandFilter" aria-label="Filter commands">
+                <option value="all">All commands</option>
+                <option value="restricted">Restricted</option>
+                <option value="open">Default access</option>
+                <option value="changed">Unsaved</option>
+              </select>
+            </div>
+            <p class="field-hint">Discord permissions still apply.</p>
+            <div class="command-list" id="commandsList"></div>
+            <div class="empty-state" id="commandsEmpty" hidden>
+              No matching commands.
+            </div>
+            <div class="custom-command">
+              <label for="newCommandInput">Custom command</label>
+              <div class="input-row">
+                <input
+                  type="text"
+                  id="newCommandInput"
+                  placeholder="command-name"
+                  maxlength="32"
+                /><button class="button" id="addCommandButton">Add</button>
+              </div>
+            </div>
+          </section>
+          <section
+            class="warnings-layout"
+            id="warningsPanel"
+            aria-label="Member warnings"
+            hidden
+          >
+            <div class="panel warnings-pane">
+              <div class="panel__header"><h2>Member</h2></div>
+              <div class="field">
+                <label for="warningsUserSearch">Search</label>
+                <div class="search-field">
+                  <svg><use href="icons.svg#search" /></svg
+                  ><input
+                    type="search"
+                    id="warningsUserSearch"
+                    placeholder="Member name"
+                    maxlength="64"
+                  />
+                </div>
+                <span
+                  class="field-hint"
+                  id="warningsSearchStatus"
+                  role="status"
+                ></span>
+              </div>
+              <div class="member-list" id="warningsUserResults"></div>
+              <div class="field">
+                <label for="warningsUserInput">Or enter a user ID</label
+                ><input
+                  type="text"
+                  id="warningsUserInput"
+                  placeholder="123456789012345678"
+                  inputmode="numeric"
+                />
+              </div>
+              <div class="selected-user-card" id="warningsSelectedCard" hidden>
+                <strong id="warningsSelectedUser"></strong
+                ><span class="field-hint" id="warningsSelectedHint"></span>
+              </div>
+              <div class="button-row warning-actions">
+                <button class="button button--dark" id="fetchWarningsButton">
+                  Load history</button
+                ><button class="button button--danger" id="clearWarningsButton">
+                  Clear warnings
+                </button>
+              </div>
+              <div
+                class="spinner"
+                id="warningsSpinner"
+                aria-label="Loading warnings"
+                hidden
+              ></div>
+            </div>
+            <div class="panel warnings-pane">
+              <div class="panel__header"><h2>History</h2></div>
+              <div class="stats-grid stats-grid--compact">
+                <article class="stat-card">
+                  <span>Warnings</span
+                  ><strong id="warningsTotalCount">–</strong>
+                </article>
+                <article class="stat-card">
+                  <span>Latest</span
+                  ><strong class="stat-value--small" id="warningsLatestDate"
+                    >–</strong
+                  >
+                </article>
+              </div>
+              <div class="empty-state" id="warningsEmpty">
+                Select a member to view warnings.
+              </div>
+              <ul id="warningsList"></ul>
+              <div class="divider"></div>
+              <div class="field">
+                <label for="warningReasonInput">Reason</label
+                ><textarea
+                  id="warningReasonInput"
+                  placeholder="Reason for warning"
+                  maxlength="500"
+                  rows="4"
+                ></textarea>
+                <div class="field__meta">
+                  <span id="warningStatus" role="status"></span
+                  ><span class="field-hint" id="warningCharCount">0/500</span>
+                </div>
+              </div>
+              <button class="button button--primary" id="addWarningButton">
+                Add warning
+              </button>
+            </div>
+          </section>
+          <div class="save-bar" id="saveBar" role="status" hidden>
+            <div>
+              <span class="save-dot"></span><strong>Unsaved changes</strong>
+            </div>
+            <div class="button-row">
+              <button class="button button--ghost" id="discardChangesButton">
+                Discard</button
+              ><button
+                class="button button--primary"
+                id="savePermissionsButton"
+              >
+                Save changes <svg><use href="icons.svg#check" /></svg>
+              </button>
+            </div>
+          </div>
+          <div
+            class="panel skeleton-panel"
+            id="contentSkeleton"
+            aria-label="Loading server"
+            hidden
+          >
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div
+      class="toast-container"
+      id="toastContainer"
+      role="status"
+      aria-live="polite"
+    ></div>
+    <dialog class="modal" id="copyModal" aria-labelledby="copyTitle">
+      <div class="modal__content">
+        <h2 id="copyTitle">Copy permissions</h2>
+        <label for="copyGuildSelect">From server</label
+        ><select id="copyGuildSelect"></select>
+        <p class="field-hint">Replace unavailable roles before saving.</p>
+        <div class="button-row">
+          <button class="button button--ghost" id="cancelCopyButton">
+            Cancel</button
+          ><button class="button button--primary" id="confirmCopyButton">
+            Copy
+          </button>
+        </div>
+      </div>
+    </dialog>
+    <script src="app.js"></script>
+    <script src="dashboard.js"></script>
+  </body>
 </html>

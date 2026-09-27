@@ -1,1076 +1,1083 @@
+const api = window.dashboardApi;
+const $ = (id) => document.getElementById(id);
 const state = {
-    guilds: [],
-    filteredGuilds: [],
-    selectedGuildId: null,
-    roles: [],
-    permissions: null,
-    commands: [],
-    botGuildIds: new Set(),
-    botInstalled: false,
-    dirty: false,
-    originalPermissions: null,
-    selectedWarningUser: null,
+  guilds: [],
+  botGuildIds: new Set(),
+  botStatusKnown: false,
+  selectedGuildId: null,
+  roles: [],
+  commands: [],
+  baseCommands: [],
+  permissions: null,
+  originalPermissions: null,
+  botInstalled: false,
+  dirty: false,
+  loading: false,
+  saving: false,
+  tab: "settings",
+  selectedWarningUser: null,
+  warningBusy: false,
+  searchVersion: 0,
 };
-
-const elements = {
-    errorBanner: document.getElementById('errorBanner'),
-    userDisplay: document.getElementById('userDisplay'),
-    sessionExpiry: document.getElementById('sessionExpiry'),
-    logoutButton: document.getElementById('logoutButton'),
-    guildList: document.getElementById('guildList'),
-    guildListSkeleton: document.getElementById('guildListSkeleton'),
-    guildEmpty: document.getElementById('guildEmpty'),
-    guildSearch: document.getElementById('guildSearch'),
-    guildHeaderIcon: document.getElementById('guildHeaderIcon'),
-    guildHeaderName: document.getElementById('guildHeaderName'),
-    guildStatusBadge: document.getElementById('guildStatusBadge'),
-    guildStatusNote: document.getElementById('guildStatusNote'),
-    inviteButton: document.getElementById('inviteButton'),
-    refreshBotButton: document.getElementById('refreshBotButton'),
-    tabs: document.querySelectorAll('.tab'),
-    settingsPanel: document.getElementById('settingsPanel'),
-    permissionsPanel: document.getElementById('permissionsPanel'),
-    warningsPanel: document.getElementById('warningsPanel'),
-    adminRolesPicker: document.getElementById('adminRolesPicker'),
-    adminUserInput: document.getElementById('adminUserInput'),
-    addAdminUserButton: document.getElementById('addAdminUserButton'),
-    adminUserChips: document.getElementById('adminUserChips'),
-    newCommandInput: document.getElementById('newCommandInput'),
-    addCommandButton: document.getElementById('addCommandButton'),
-    commandsList: document.getElementById('commandsList'),
-    commandsEmpty: document.getElementById('commandsEmpty'),
-    clearAllCommands: document.getElementById('clearAllCommands'),
-    copyFromGuild: document.getElementById('copyFromGuild'),
-    savePermissionsButton: document.getElementById('savePermissionsButton'),
-    discardChangesButton: document.getElementById('discardChangesButton'),
-    saveBar: document.getElementById('saveBar'),
-    botInactiveCallout: document.getElementById('botInactiveCallout'),
-    warningsUserInput: document.getElementById('warningsUserInput'),
-    warningsUserSearch: document.getElementById('warningsUserSearch'),
-    warningsUserResults: document.getElementById('warningsUserResults'),
-    warningsSelectedUser: document.getElementById('warningsSelectedUser'),
-    fetchWarningsButton: document.getElementById('fetchWarningsButton'),
-    clearWarningsButton: document.getElementById('clearWarningsButton'),
-    warningsList: document.getElementById('warningsList'),
-    warningsEmpty: document.getElementById('warningsEmpty'),
-    warningsSpinner: document.getElementById('warningsSpinner'),
-    newWarningUserInput: document.getElementById('newWarningUserInput'),
-    warningReasonInput: document.getElementById('warningReasonInput'),
-    warningCharCount: document.getElementById('warningCharCount'),
-    addWarningButton: document.getElementById('addWarningButton'),
-    warningStatus: document.getElementById('warningStatus'),
-    contentSkeleton: document.getElementById('contentSkeleton'),
-    copyModal: document.getElementById('copyModal'),
-    copyGuildSelect: document.getElementById('copyGuildSelect'),
-    cancelCopyButton: document.getElementById('cancelCopyButton'),
-    confirmCopyButton: document.getElementById('confirmCopyButton'),
+const pages = {
+  settings: "Overview",
+  permissions: "Permissions",
+  warnings: "Warnings",
 };
-
-const dashboardApi = window.dashboardApi;
-const fetchDashboardJson = dashboardApi.fetchJson;
-
-const COMMAND_NAME_REGEX = /^[a-z0-9_-]{1,32}$/i;
-
-const clonePermissions = (permissions) => JSON.parse(JSON.stringify(permissions || {}));
-
-const normalizePermissions = (permissions = {}) => ({
-    adminRoleIds: Array.isArray(permissions.adminRoleIds) ? permissions.adminRoleIds : [],
-    adminUserIds: Array.isArray(permissions.adminUserIds) ? permissions.adminUserIds : [],
-    commandPermissions: permissions.commandPermissions || {},
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const node = (tag, className, text) => {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
+};
+const normalizeEntry = (entry = {}) => ({
+  allowedRoleIds: Array.isArray(entry.allowedRoleIds)
+    ? [...entry.allowedRoleIds]
+    : [],
+  allowedUserIds: Array.isArray(entry.allowedUserIds)
+    ? [...entry.allowedUserIds]
+    : [],
+  restricted: Boolean(
+    entry.allowedRoleIds?.length || entry.allowedUserIds?.length,
+  ),
 });
-
-const setLoadingGuilds = (isLoading) => {
-    elements.guildList.hidden = isLoading;
-    elements.guildListSkeleton.hidden = !isLoading;
-};
-
-const setLoadingDetails = (isLoading) => {
-    elements.contentSkeleton.hidden = !isLoading;
-    if (isLoading) {
-        elements.settingsPanel.hidden = true;
-        elements.permissionsPanel.hidden = true;
-        elements.warningsPanel.hidden = true;
-        return;
-    }
-    const activeTab = document.querySelector('.tab.active')?.dataset.tab || 'settings';
-    elements.settingsPanel.hidden = activeTab !== 'settings';
-    elements.permissionsPanel.hidden = activeTab !== 'permissions';
-    elements.warningsPanel.hidden = activeTab !== 'warnings';
-};
-
-const setDirty = (isDirty) => {
-    state.dirty = isDirty;
-    elements.saveBar.hidden = !isDirty;
-};
-
-const parseIdList = (value) => {
-    if (!value) {
-        return [];
-    }
-    return Array.from(
-        new Set(
-            value
-                .split(/[\s,\n]+/)
-                .map((entry) => entry.trim())
-                .filter(Boolean),
-        ),
-    );
-};
-
+const normalizePermissions = (permissions = {}) => ({
+  adminRoleIds: [...(permissions.adminRoleIds || [])],
+  adminUserIds: [...(permissions.adminUserIds || [])],
+  commandPermissions: Object.fromEntries(
+    Object.entries(permissions.commandPermissions || {}).map(
+      ([name, entry]) => [name, normalizeEntry(entry)],
+    ),
+  ),
+});
+const canonicalEntry = (entry = {}) =>
+  JSON.stringify({
+    roles: [...(entry.allowedRoleIds || [])].sort(),
+    users: [...(entry.allowedUserIds || [])].sort(),
+    restricted: Boolean(entry.restricted),
+  });
+const commandChanged = (name) =>
+  canonicalEntry(state.permissions?.commandPermissions[name]) !==
+    canonicalEntry(state.originalPermissions?.commandPermissions[name]) ||
+  !state.baseCommands.includes(name);
+const permissionSignature = (permissions) =>
+  JSON.stringify({
+    roles: [...(permissions?.adminRoleIds || [])].sort(),
+    users: [...(permissions?.adminUserIds || [])].sort(),
+    commands: state.commands
+      .map((name) => [
+        name,
+        canonicalEntry(permissions?.commandPermissions[name]),
+      ])
+      .sort(),
+  });
 const setError = (error) => {
-    if (!error) {
-        dashboardApi.clearErrorBanner(elements.errorBanner);
-        return;
-    }
-    dashboardApi.setErrorBanner(elements.errorBanner, error.message || 'Something went wrong.', error.payload || error);
+  if (!error) return api.clearErrorBanner($("errorBanner"));
+  api.setErrorBanner(
+    $("errorBanner"),
+    error.message || "Please try again.",
+    error.payload || { message: error.message },
+  );
 };
-
-const handleFetchError = (error, fallback) => {
-    if (error?.code === 'BOT_NOT_IN_GUILD') {
-        return;
-    }
-    setError(error || {message: fallback});
-};
-
-const updateGuildHeader = (guild) => {
-    if (!guild) {
-        elements.guildHeaderName.textContent = 'Select a guild';
-        elements.guildHeaderIcon.src = '';
-        elements.guildStatusBadge.textContent = '';
-        elements.guildStatusNote.textContent = '';
-        return;
-    }
-    elements.guildHeaderName.textContent = guild.name;
-    if (guild.icon) {
-        elements.guildHeaderIcon.src = `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`;
-    } else {
-        elements.guildHeaderIcon.removeAttribute('src');
-    }
-    if (state.botInstalled) {
-        elements.guildStatusBadge.textContent = 'Bot added';
-        elements.guildStatusBadge.className = 'status-badge status-badge--ok';
-        elements.guildStatusNote.textContent = 'Settings are active.';
-    } else {
-        elements.guildStatusBadge.textContent = 'Not added';
-        elements.guildStatusBadge.className = 'status-badge status-badge--warn';
-        elements.guildStatusNote.textContent = 'The bot isn’t in this server yet. Invite it to configure settings.';
-    }
-};
-
-const renderGuilds = () => {
-    elements.guildList.innerHTML = '';
-    if (state.filteredGuilds.length === 0) {
-        elements.guildEmpty.hidden = false;
-        return;
-    }
-    elements.guildEmpty.hidden = true;
-    state.filteredGuilds.forEach((guild) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = `guild-item${state.selectedGuildId === guild.id ? ' active' : ''}`;
-        item.dataset.guildId = guild.id;
-        const info = document.createElement('div');
-        info.className = 'guild-item__info';
-        const icon = document.createElement('img');
-        if (guild.icon) {
-            icon.src = `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`;
-            icon.alt = `${guild.name} icon`;
-        } else {
-            icon.alt = '';
-        }
-        const name = document.createElement('span');
-        name.textContent = guild.name;
-        info.appendChild(icon);
-        info.appendChild(name);
-
-        const badge = document.createElement('span');
-        const isBotInGuild = state.botGuildIds.size === 0 ? null : state.botGuildIds.has(guild.id);
-        badge.className = `status-pill ${isBotInGuild ? 'status-pill--ok' : 'status-pill--warn'}`;
-        const dot = document.createElement('span');
-        dot.className = 'status-pill__dot';
-        const text = document.createElement('span');
-        text.textContent = isBotInGuild ? 'Bot added' : 'Not added';
-        badge.appendChild(dot);
-        badge.appendChild(text);
-
-        item.appendChild(info);
-        item.appendChild(badge);
-        item.addEventListener('click', () => selectGuild(guild.id));
-        elements.guildList.appendChild(item);
+const parseIds = (value) => [...new Set(value.split(/[\s,]+/).filter(Boolean))];
+const validIds = (ids) => ids.every((id) => /^\d{17,20}$/.test(id));
+const readIds = (input) => {
+  const ids = parseIds(input.value.trim());
+  if (!validIds(ids)) {
+    setError({
+      message:
+        "Use Discord user IDs with 17–20 digits, separated by spaces or commas.",
     });
+    input.focus();
+    return [];
+  }
+  setError(null);
+  return ids;
 };
-
-const renderRolePicker = (container, roles, selectedIds, onChange, options = {}) => {
-    container.innerHTML = '';
-    const wrapper = document.createElement('div');
-    wrapper.className = `multi-picker${options.disabled ? ' multi-picker--disabled' : ''}`;
-
-    const search = document.createElement('input');
-    search.type = 'text';
-    search.className = 'multi-picker__search';
-    search.placeholder = 'Search roles';
-    const list = document.createElement('div');
-    list.className = 'multi-picker__list';
-    const chips = document.createElement('div');
-    chips.className = 'chip-list';
-
-    const renderChips = () => {
-        chips.innerHTML = '';
-        if (selectedIds.length === 0) {
-            const empty = document.createElement('span');
-            empty.className = 'muted';
-            empty.textContent = options.emptyMessage || 'No roles selected.';
-            chips.appendChild(empty);
-            return;
-        }
-        selectedIds.forEach((roleId) => {
-            const role = roles.find((entry) => entry.id === roleId);
-            if (!role) {
-                return;
-            }
-            const chip = document.createElement('span');
-            chip.className = 'chip';
-            chip.textContent = role.name;
-            const removeButton = document.createElement('button');
-            removeButton.type = 'button';
-            removeButton.textContent = '✕';
-            removeButton.addEventListener('click', () => {
-                const next = selectedIds.filter((id) => id !== roleId);
-                selectedIds.splice(0, selectedIds.length, ...next);
-                onChange([...selectedIds]);
-                renderList(search.value);
-                renderChips();
-            });
-            chip.appendChild(removeButton);
-            chips.appendChild(chip);
-        });
-    };
-
-    const renderList = (query = '') => {
-        list.innerHTML = '';
-        const filteredRoles = roles
-            .filter((role) => role.name.toLowerCase().includes(query.toLowerCase()))
-            .sort((a, b) => b.position - a.position);
-        if (filteredRoles.length === 0) {
-            const empty = document.createElement('span');
-            empty.className = 'muted';
-            empty.textContent = 'No matching roles.';
-            list.appendChild(empty);
-            return;
-        }
-        filteredRoles.forEach((role) => {
-            const label = document.createElement('label');
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = selectedIds.includes(role.id);
-            checkbox.disabled = options.disabled;
-            checkbox.addEventListener('change', () => {
-                if (checkbox.checked) {
-                    if (!selectedIds.includes(role.id)) {
-                        selectedIds.push(role.id);
-                    }
-                } else {
-                    const next = selectedIds.filter((id) => id !== role.id);
-                    selectedIds.splice(0, selectedIds.length, ...next);
-                }
-                onChange([...selectedIds]);
-                renderChips();
-            });
-            label.appendChild(checkbox);
-            label.appendChild(document.createTextNode(role.name));
-            list.appendChild(label);
-        });
-    };
-
-    search.addEventListener('input', () => renderList(search.value));
-
-    renderList();
-    renderChips();
-
-    wrapper.appendChild(search);
-    wrapper.appendChild(list);
-    wrapper.appendChild(chips);
-    container.appendChild(wrapper);
-};
-
-const renderAdminUsers = () => {
-    elements.adminUserChips.innerHTML = '';
-    const adminUserIds = state.permissions?.adminUserIds || [];
-    if (adminUserIds.length === 0) {
-        const empty = document.createElement('span');
-        empty.className = 'muted';
-        empty.textContent = 'No admin users added.';
-        elements.adminUserChips.appendChild(empty);
-        return;
-    }
-
-    adminUserIds.forEach((userId) => {
-        const chip = document.createElement('span');
-        chip.className = 'chip';
-        chip.textContent = userId;
-        const removeButton = document.createElement('button');
-        removeButton.type = 'button';
-        removeButton.textContent = '✕';
-        removeButton.addEventListener('click', () => {
-            state.permissions.adminUserIds = adminUserIds.filter((id) => id !== userId);
-            setDirty(true);
-            renderAdminUsers();
-        });
-        chip.appendChild(removeButton);
-        elements.adminUserChips.appendChild(chip);
-    });
-};
-
-const formatMemberDisplay = (member) => {
-    const user = member?.user || {};
-    const displayName = member?.nick || user.global_name || user.username || 'Unknown user';
-    const tag = user.discriminator && user.discriminator !== '0' ? `#${user.discriminator}` : '';
-    return `${displayName}${tag}`;
-};
-
-const setSelectedWarningUser = (member) => {
-    state.selectedWarningUser = member || null;
-    if (!member) {
-        elements.warningsSelectedUser.textContent = 'No user selected.';
-        return;
-    }
-    elements.warningsSelectedUser.textContent = `${formatMemberDisplay(member)} (${member.id})`;
-    elements.warningsUserInput.value = member.id;
-    elements.newWarningUserInput.value = member.id;
-};
-
-const setManualWarningUser = (userId) => {
-    state.selectedWarningUser = null;
-    if (!userId) {
-        elements.warningsSelectedUser.textContent = 'No user selected.';
-        return;
-    }
-    elements.warningsSelectedUser.textContent = `Using manual ID: ${userId}`;
-};
-
-const resetWarningSelection = () => {
-    setSelectedWarningUser(null);
-    elements.warningsUserResults.innerHTML = '';
-    elements.warningsUserSearch.value = '';
-    elements.warningsUserInput.value = '';
-    elements.newWarningUserInput.value = '';
-    elements.warningsList.innerHTML = '';
-    elements.warningsEmpty.hidden = true;
-};
-
-const ensureCommandEntry = (commandName) => {
-    if (!state.permissions.commandPermissions[commandName]) {
-        state.permissions.commandPermissions[commandName] = {
-            allowedRoleIds: [],
-            allowedUserIds: [],
-            restricted: false,
-        };
-    }
-    const entry = state.permissions.commandPermissions[commandName];
-    entry.allowedRoleIds = Array.isArray(entry.allowedRoleIds) ? entry.allowedRoleIds : [];
-    entry.allowedUserIds = Array.isArray(entry.allowedUserIds) ? entry.allowedUserIds : [];
-    if (typeof entry.restricted !== 'boolean') {
-        entry.restricted = entry.allowedRoleIds.length > 0 || entry.allowedUserIds.length > 0;
-    }
-};
-
-const renderCommands = () => {
-    elements.commandsList.innerHTML = '';
-    const commands = [...new Set(state.commands)].sort();
-    if (commands.length === 0) {
-        elements.commandsEmpty.hidden = false;
-        return;
-    }
-    elements.commandsEmpty.hidden = true;
-
-    commands.forEach((commandName) => {
-        ensureCommandEntry(commandName);
-        const commandConfig = state.permissions.commandPermissions[commandName];
-        const isRestricted = Boolean(commandConfig.restricted);
-
-        const card = document.createElement('div');
-        card.className = `command-card${state.botInstalled ? '' : ' command-card--disabled'}`;
-        const header = document.createElement('div');
-        header.className = 'command-card__header';
-
-        const title = document.createElement('strong');
-        title.textContent = `/${commandName}`;
-
-        const toggleLabel = document.createElement('label');
-        toggleLabel.className = 'toggle';
-        const toggle = document.createElement('input');
-        toggle.type = 'checkbox';
-        toggle.checked = isRestricted;
-        toggleLabel.appendChild(toggle);
-        toggleLabel.appendChild(document.createTextNode('Restricted'));
-
-        header.appendChild(title);
-        header.appendChild(toggleLabel);
-
-        const body = document.createElement('div');
-        body.className = 'command-card__body';
-
-        const roleSection = document.createElement('div');
-        const roleLabel = document.createElement('p');
-        roleLabel.className = 'muted';
-        roleLabel.textContent = 'Allowed roles';
-        const rolePicker = document.createElement('div');
-        roleSection.appendChild(roleLabel);
-        roleSection.appendChild(rolePicker);
-
-        const userSection = document.createElement('div');
-        const userLabel = document.createElement('p');
-        userLabel.className = 'muted';
-        userLabel.textContent = 'Allowed users';
-        const userInput = document.createElement('input');
-        userInput.type = 'text';
-        userInput.placeholder = 'Paste user IDs';
-        const addUserButton = document.createElement('button');
-        addUserButton.type = 'button';
-        addUserButton.className = 'button';
-        addUserButton.textContent = 'Add';
-        const userControls = document.createElement('div');
-        userControls.className = 'input-row';
-        userControls.appendChild(userInput);
-        userControls.appendChild(addUserButton);
-        const chipList = document.createElement('div');
-        chipList.className = 'chip-list';
-
-        const renderUserChips = () => {
-            chipList.innerHTML = '';
-            if (commandConfig.allowedUserIds.length === 0) {
-                const empty = document.createElement('span');
-                empty.className = 'muted';
-                empty.textContent = 'No users added.';
-                chipList.appendChild(empty);
-                return;
-            }
-            commandConfig.allowedUserIds.forEach((userId) => {
-                const chip = document.createElement('span');
-                chip.className = 'chip';
-                chip.textContent = userId;
-                const remove = document.createElement('button');
-                remove.type = 'button';
-                remove.textContent = '✕';
-                remove.addEventListener('click', () => {
-                    commandConfig.allowedUserIds = commandConfig.allowedUserIds.filter((id) => id !== userId);
-                    setDirty(true);
-                    renderUserChips();
-                });
-                chip.appendChild(remove);
-                chipList.appendChild(chip);
-            });
-        };
-
-        const addUsers = () => {
-            const values = parseIdList(userInput.value);
-            if (values.length === 0) {
-                return;
-            }
-            const merged = Array.from(new Set([...commandConfig.allowedUserIds, ...values]));
-            commandConfig.allowedUserIds = merged;
-            setDirty(true);
-            userInput.value = '';
-            renderUserChips();
-        };
-
-        addUserButton.addEventListener('click', addUsers);
-        userInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                addUsers();
-            }
-        });
-
-        userSection.appendChild(userLabel);
-        userSection.appendChild(userControls);
-        userSection.appendChild(chipList);
-        renderUserChips();
-
-        const actions = document.createElement('div');
-        const clearButton = document.createElement('button');
-        clearButton.type = 'button';
-        clearButton.className = 'button button--ghost';
-        clearButton.textContent = 'Clear';
-        clearButton.addEventListener('click', () => {
-            commandConfig.allowedRoleIds = [];
-            commandConfig.allowedUserIds = [];
-            commandConfig.restricted = false;
-            setDirty(true);
-            renderCommands();
-        });
-        actions.appendChild(clearButton);
-
-        body.appendChild(roleSection);
-        body.appendChild(userSection);
-        body.appendChild(actions);
-
-        toggle.addEventListener('change', () => {
-            setDirty(true);
-            commandConfig.restricted = toggle.checked;
-            if (!toggle.checked) {
-                commandConfig.allowedRoleIds = [];
-                commandConfig.allowedUserIds = [];
-            }
-            renderCommands();
-        });
-
-        const controlsDisabled = !state.botInstalled || !isRestricted;
-        userInput.disabled = controlsDisabled;
-        addUserButton.disabled = controlsDisabled;
-
-        renderRolePicker(
-            rolePicker,
-            state.roles,
-            commandConfig.allowedRoleIds,
-            (selected) => {
-                commandConfig.allowedRoleIds = selected;
-                setDirty(true);
-            },
-            {
-                disabled: !state.botInstalled || !isRestricted,
-                emptyMessage: isRestricted ? 'Select roles to allow.' : 'Allow all roles.',
-            },
-        );
-
-        card.appendChild(header);
-        card.appendChild(body);
-        elements.commandsList.appendChild(card);
-    });
-};
-
-const renderPanels = () => {
-    renderRolePicker(
-        elements.adminRolesPicker,
-        state.roles,
-        state.permissions.adminRoleIds,
-        (selected) => {
-            state.permissions.adminRoleIds = selected;
-            setDirty(true);
-        },
-        {
-            disabled: !state.botInstalled,
-            emptyMessage: state.botInstalled ? 'Select roles to grant admin access.' : 'Invite bot to load roles.',
-        },
+const updateSummary = () => {
+  const ready = Boolean(state.permissions);
+  const total = state.commands.length;
+  const restricted = state.commands.filter(
+    (name) => state.permissions?.commandPermissions[name]?.restricted,
+  ).length;
+  const changed = state.commands.filter(commandChanged).length;
+  $("navCommandCount").textContent = ready ? total : "–";
+  $("overviewCommandCount").textContent = ready ? total : "–";
+  $("overviewRoleCount").textContent = ready
+    ? state.permissions.adminRoleIds.length
+    : "–";
+  $("overviewRestrictedCount").textContent = ready ? restricted : "–";
+  $("permissionTotalCount").textContent = total;
+  $("permissionRestrictedCount").textContent = restricted;
+  $("permissionOpenCount").textContent = total - restricted;
+  $("permissionChangedCount").textContent = changed;
+  document
+    .querySelectorAll(".command-card")
+    .forEach((card) =>
+      card.classList.toggle(
+        "command-card--changed",
+        commandChanged(card.dataset.command),
+      ),
     );
-    renderAdminUsers();
-    renderCommands();
-
-    if (!state.botInstalled) {
-        elements.settingsPanel.classList.add('panel--disabled');
-        elements.permissionsPanel.classList.add('panel--disabled');
-        elements.botInactiveCallout.hidden = false;
-    } else {
-        elements.settingsPanel.classList.remove('panel--disabled');
-        elements.permissionsPanel.classList.remove('panel--disabled');
-        elements.botInactiveCallout.hidden = true;
-    }
 };
-
-const updateBotStatusControls = () => {
-    if (state.botInstalled) {
-        elements.inviteButton.hidden = true;
-        elements.refreshBotButton.hidden = true;
-    } else {
-        elements.inviteButton.hidden = false;
-        elements.refreshBotButton.hidden = false;
-    }
+const updateDirty = () => {
+  state.dirty = Boolean(
+    state.permissions &&
+    state.originalPermissions &&
+    (permissionSignature(state.permissions) !==
+      permissionSignature(state.originalPermissions) ||
+      state.commands.some((name) => !state.baseCommands.includes(name))),
+  );
+  $("saveBar").hidden = !state.dirty;
+  updateSummary();
 };
-
-const loadSession = async () => {
-    const data = await fetchDashboardJson('/api/me');
-    elements.userDisplay.textContent = dashboardApi.formatUserDisplay(data.user);
-    dashboardApi.setCsrfToken(data.csrfToken);
-    if (data.expiresAt) {
-        const expires = new Date(data.expiresAt);
-        elements.sessionExpiry.textContent = `Session expires ${expires.toLocaleString()}`;
-    }
+const syncVisibility = () => {
+  const ready = Boolean(state.permissions) && !state.loading;
+  ["settings", "permissions", "warnings"].forEach((name) => {
+    $(`${name}Panel`).hidden = !ready || state.tab !== name;
+  });
+  $("overviewStats").hidden = state.tab !== "settings";
+  $("contentSkeleton").hidden = !state.loading;
+  $("workspaceEmpty").hidden = Boolean(state.selectedGuildId) || state.loading;
+  $("botInactiveCallout").hidden =
+    !state.selectedGuildId || state.botInstalled || !state.botStatusKnown;
+  $("inviteButton").hidden = $("botInactiveCallout").hidden;
+  $("saveBar").hidden = !state.dirty;
+  $("savePermissionsButton").disabled = state.saving || state.loading;
+  $("discardChangesButton").disabled = state.saving || state.loading;
 };
-
-const loadGuilds = async () => {
-    setLoadingGuilds(true);
-    try {
-        const data = await fetchDashboardJson('/api/guilds');
-        state.guilds = data.guilds || [];
-        state.filteredGuilds = [...state.guilds];
-        if (state.guilds.length > 0 && !state.selectedGuildId) {
-            state.selectedGuildId = state.guilds[0].id;
-        }
-        renderGuilds();
-    } finally {
-        setLoadingGuilds(false);
-    }
+const switchTab = (name) => {
+  if (!pages[name]) return;
+  state.tab = name;
+  const label = pages[name];
+  $("currentPage").textContent = label;
+  $("pageTitle").textContent = label;
+  document.title = `${label} · The Steward`;
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.tab === name);
+    if (tab.dataset.tab === name) tab.setAttribute("aria-current", "page");
+    else tab.removeAttribute("aria-current");
+  });
+  syncVisibility();
 };
-
+const initials = (name) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
+const updateGuildHeader = () => {
+  const guild = state.guilds.find(
+    (entry) => entry.id === state.selectedGuildId,
+  );
+  $("guildHeaderName").textContent = guild?.name || "Select a server";
+  $("guildHeaderFallback").textContent = initials(guild?.name || "Steward");
+  $("guildHeaderIcon").hidden = !guild?.icon;
+  $("guildHeaderFallback").hidden = Boolean(guild?.icon);
+  if (guild?.icon)
+    $("guildHeaderIcon").src =
+      `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`;
+  else $("guildHeaderIcon").removeAttribute("src");
+  const known = guild && state.botStatusKnown;
+  $("overviewBotStatus").textContent = !guild
+    ? "–"
+    : !known
+      ? "Unknown"
+      : state.botInstalled
+        ? "Added"
+        : "Not added";
+  $("overviewBotStatus").classList.toggle(
+    "is-connected",
+    Boolean(known && state.botInstalled),
+  );
+  $("refreshBotButton").hidden = !guild;
+};
+const renderGuilds = () => {
+  const query = $("guildSearch").value.trim().toLowerCase();
+  const guilds = state.guilds.filter((guild) =>
+    guild.name.toLowerCase().includes(query),
+  );
+  $("guildCount").textContent = state.guilds.length.toString().padStart(2, "0");
+  $("guildList").replaceChildren();
+  $("guildEmpty").hidden = guilds.length > 0;
+  $("guildEmpty").textContent = query
+    ? "No matching servers."
+    : "No servers available. Manage Server permission required.";
+  guilds.forEach((guild) => {
+    const button = node(
+      "button",
+      `guild-item${guild.id === state.selectedGuildId ? " active" : ""}`,
+    );
+    button.type = "button";
+    button.disabled = state.loading || state.saving;
+    button.setAttribute(
+      "aria-pressed",
+      String(guild.id === state.selectedGuildId),
+    );
+    const info = node("span", "guild-item__info");
+    const fallback = node("span", "guild-avatar", initials(guild.name));
+    if (guild.icon) {
+      const img = node("img");
+      img.src = `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`;
+      img.alt = "";
+      img.addEventListener("error", () => img.replaceWith(fallback), {
+        once: true,
+      });
+      info.append(img);
+    } else info.append(fallback);
+    info.append(node("span", "guild-item__name", guild.name));
+    const installed = state.botGuildIds.has(guild.id);
+    const status = !state.botStatusKnown
+      ? "Status unavailable"
+      : installed
+        ? "Bot added"
+        : "Not invited";
+    button.title = `${guild.name} · ${status}`;
+    const badge = node(
+      "span",
+      `status-pill${installed ? " status-pill--ok" : ""}`,
+    );
+    badge.setAttribute("aria-label", status);
+    badge.append(node("span", "status-pill__dot"));
+    button.append(info, badge);
+    button.addEventListener("click", () => selectGuild(guild.id));
+    $("guildList").append(button);
+  });
+};
+const renderChips = (container, ids, nameForId, onRemove, disabled = false) => {
+  container.replaceChildren();
+  container.hidden = !ids.length;
+  ids.forEach((id) => {
+    const chip = node("span", "chip", nameForId(id));
+    const remove = node("button", "", "×");
+    remove.type = "button";
+    remove.disabled = disabled;
+    remove.setAttribute("aria-label", `Remove ${nameForId(id)}`);
+    remove.addEventListener("click", () => onRemove(id));
+    chip.append(remove);
+    container.append(chip);
+  });
+};
+const renderRolePicker = (container, ids, onChange, label) => {
+  container.replaceChildren();
+  const wrapper = node("div", "multi-picker");
+  const search = node("input", "multi-picker__search");
+  search.type = "search";
+  search.placeholder = "Find a role…";
+  search.setAttribute("aria-label", `Search ${label}`);
+  search.disabled = !state.botInstalled;
+  const list = node("div", "multi-picker__list");
+  const chips = node("div", "chip-list");
+  const refreshChips = () => {
+    renderChips(
+      chips,
+      ids,
+      (id) =>
+        state.roles.find((role) => role.id === id)?.name ||
+        `Unavailable role · ${id}`,
+      (id) => {
+        ids.splice(ids.indexOf(id), 1);
+        onChange();
+        refreshList();
+        refreshChips();
+      },
+      !state.botInstalled,
+    );
+  };
+  const refreshList = () => {
+    list.replaceChildren();
+    const roles = state.roles
+      .filter((role) =>
+        role.name.toLowerCase().includes(search.value.toLowerCase()),
+      )
+      .sort((a, b) => b.position - a.position);
+    if (!roles.length)
+      list.append(
+        node(
+          "span",
+          "field-hint",
+          state.botInstalled
+            ? "No matching roles."
+            : "Server roles are unavailable.",
+        ),
+      );
+    roles.forEach((role) => {
+      const row = node("label");
+      const checkbox = node("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = ids.includes(role.id);
+      checkbox.disabled = !state.botInstalled;
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) ids.push(role.id);
+        else ids.splice(ids.indexOf(role.id), 1);
+        onChange();
+        refreshChips();
+      });
+      const dot = node("span", "role-dot");
+      if (
+        Number.isInteger(role.color) &&
+        role.color > 0 &&
+        role.color <= 0xffffff
+      )
+        dot.style.setProperty(
+          "--role-color",
+          `#${role.color.toString(16).padStart(6, "0")}`,
+        );
+      row.append(checkbox, dot, document.createTextNode(role.name));
+      list.append(row);
+    });
+  };
+  search.addEventListener("input", refreshList);
+  wrapper.append(search, list, chips);
+  container.append(wrapper);
+  refreshList();
+  refreshChips();
+};
+const ensureCommands = () => {
+  state.commands = [
+    ...new Set([
+      ...state.commands,
+      ...Object.keys(state.permissions.commandPermissions),
+    ]),
+  ].sort();
+  const entries = state.permissions.commandPermissions;
+  state.permissions.commandPermissions = Object.fromEntries(
+    state.commands.map((name) => [
+      name,
+      Object.hasOwn(entries, name) ? entries[name] : normalizeEntry(),
+    ]),
+  );
+};
+const renderAdminUsers = () =>
+  renderChips(
+    $("adminUserChips"),
+    state.permissions.adminUserIds,
+    (id) => id,
+    (id) => {
+      state.permissions.adminUserIds = state.permissions.adminUserIds.filter(
+        (entry) => entry !== id,
+      );
+      updateDirty();
+      renderAdminUsers();
+    },
+    !state.botInstalled,
+  );
+const renderCommands = () => {
+  $("commandsList").replaceChildren();
+  if (!state.permissions) return;
+  const query = $("commandSearch")
+    .value.trim()
+    .toLowerCase()
+    .replace(/^\//, "");
+  const filter = $("commandFilter").value;
+  const names = state.commands.filter(
+    (name) =>
+      name.toLowerCase().includes(query) &&
+      (filter === "all" ||
+        (filter === "restricted" &&
+          state.permissions.commandPermissions[name].restricted) ||
+        (filter === "open" &&
+          !state.permissions.commandPermissions[name].restricted) ||
+        (filter === "changed" && commandChanged(name))),
+  );
+  $("commandsEmpty").hidden = names.length > 0;
+  names.forEach((name) => {
+    const config = state.permissions.commandPermissions[name];
+    const card = node(
+      "article",
+      `command-card${commandChanged(name) ? " command-card--changed" : ""}`,
+    );
+    card.dataset.command = name;
+    const header = node("div", "command-card__header");
+    const title = node("div", "command-card__title");
+    title.append(node("strong", "", `/${name}`));
+    const toggleLabel = node("label", "toggle");
+    const toggle = node("input");
+    toggle.type = "checkbox";
+    toggle.checked = config.restricted;
+    toggle.disabled = !state.botInstalled;
+    toggle.setAttribute("aria-label", `Restrict /${name}`);
+    toggle.id = `restrict-${name}`;
+    toggleLabel.append(document.createTextNode("Restricted"), toggle);
+    header.append(title, toggleLabel);
+    card.append(header);
+    toggle.addEventListener("change", () => {
+      config.restricted = toggle.checked;
+      if (!toggle.checked) {
+        config.allowedRoleIds = [];
+        config.allowedUserIds = [];
+      }
+      updateDirty();
+      renderCommands();
+      document
+        .getElementById(`restrict-${name}`)
+        ?.focus({ preventScroll: true });
+    });
+    if (config.restricted) {
+      const body = node("div", "command-card__body");
+      const roles = node("div", "field");
+      roles.append(node("span", "", "Allowed roles"));
+      const picker = node("div");
+      roles.append(picker);
+      const note = node("p", "command-card__note");
+      const updateNote = () => {
+        note.hidden = Boolean(
+          config.allowedRoleIds.length || config.allowedUserIds.length,
+        );
+        note.textContent = "Select at least one role or member.";
+      };
+      renderRolePicker(
+        picker,
+        config.allowedRoleIds,
+        () => {
+          updateDirty();
+          updateNote();
+        },
+        `roles for /${name}`,
+      );
+      const users = node("div", "field");
+      const label = node("label", "", "Allowed members");
+      const input = node("input");
+      input.type = "text";
+      input.placeholder = "Paste Discord user IDs";
+      input.id = `users-${name}`;
+      input.disabled = !state.botInstalled;
+      label.htmlFor = input.id;
+      const add = node("button", "button", "Add");
+      add.type = "button";
+      add.disabled = !state.botInstalled;
+      const row = node("div", "input-row");
+      row.append(input, add);
+      const chips = node("div", "chip-list");
+      const refreshUsers = () =>
+        renderChips(
+          chips,
+          config.allowedUserIds,
+          (id) => id,
+          (id) => {
+            config.allowedUserIds = config.allowedUserIds.filter(
+              (entry) => entry !== id,
+            );
+            updateDirty();
+            refreshUsers();
+            updateNote();
+          },
+          !state.botInstalled,
+        );
+      const addUsers = () => {
+        const ids = readIds(input);
+        if (!ids.length) return;
+        config.allowedUserIds = [
+          ...new Set([...config.allowedUserIds, ...ids]),
+        ];
+        input.value = "";
+        updateDirty();
+        refreshUsers();
+        updateNote();
+      };
+      add.addEventListener("click", addUsers);
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") addUsers();
+      });
+      users.append(label, row, chips);
+      refreshUsers();
+      updateNote();
+      body.append(roles, users, note);
+      card.append(body);
+    }
+    $("commandsList").append(card);
+  });
+  updateSummary();
+};
+const renderPanels = () => {
+  if (!state.permissions) return;
+  renderRolePicker(
+    $("adminRolesPicker"),
+    state.permissions.adminRoleIds,
+    updateDirty,
+    "admin roles",
+  );
+  renderAdminUsers();
+  renderCommands();
+  updateSummary();
+  [
+    "adminUserInput",
+    "addAdminUserButton",
+    "newCommandInput",
+    "addCommandButton",
+    "clearAllCommands",
+    "copyFromGuild",
+  ].forEach((id) => {
+    $(id).disabled = !state.botInstalled;
+  });
+  $("copyFromGuild").disabled = !state.botInstalled || state.guilds.length < 2;
+  $("warningsUserSearch").disabled = !state.botInstalled;
+  syncVisibility();
+};
 const loadBotGuilds = async () => {
-    try {
-        const data = await fetchDashboardJson('/api/bot/guilds');
-        state.botGuildIds = new Set(data.guildIds || []);
-    } catch (error) {
-        state.botGuildIds = new Set();
-        handleFetchError(error, 'Failed to fetch bot status.');
-    }
+  try {
+    const data = await api.fetchJson("/api/bot/guilds");
+    state.botGuildIds = new Set(data.guildIds || []);
+    state.botStatusKnown = true;
+  } catch (error) {
+    state.botStatusKnown = false;
+    setError(error);
+  }
 };
-
-const updateBotInstalled = () => {
-    state.botInstalled = state.selectedGuildId ? state.botGuildIds.has(state.selectedGuildId) : false;
+const resetWarningHistory = () => {
+  $("warningsList").replaceChildren();
+  $("warningsTotalCount").textContent = "–";
+  $("warningsLatestDate").textContent = "–";
+  $("warningsEmpty").hidden = false;
+  $("warningsEmpty").textContent = "Select a member to view warnings.";
 };
-
+const warningTarget = () => $("warningsUserInput").value.trim();
+const setWarningTarget = (member = null) => {
+  state.selectedWarningUser = member;
+  if (member) $("warningsUserInput").value = member.id;
+  const id = warningTarget();
+  $("warningsSelectedUser").textContent = member
+    ? member.nick ||
+      member.user?.global_name ||
+      member.user?.username ||
+      member.id
+    : id || "No member selected";
+  $("warningsSelectedCard").hidden = !id;
+  $("warningsSelectedHint").textContent = member ? id : "";
+  $("warningReasonInput").value = "";
+  $("warningStatus").textContent = "";
+  updateWarningCount();
+  resetWarningHistory();
+  document
+    .querySelectorAll(".member-item")
+    .forEach((button) =>
+      button.classList.toggle("active", button.dataset.userId === id),
+    );
+};
+const resetWarningSelection = () => {
+  state.searchVersion += 1;
+  $("warningsUserInput").value = "";
+  $("warningsUserSearch").value = "";
+  $("warningsUserResults").replaceChildren();
+  $("warningsSearchStatus").textContent = "";
+  setWarningTarget();
+};
 const loadGuildDetails = async () => {
-    if (!state.selectedGuildId) {
-        return;
+  if (!state.selectedGuildId) {
+    syncVisibility();
+    return;
+  }
+  state.loading = true;
+  state.permissions = null;
+  state.originalPermissions = null;
+  state.commands = [];
+  state.roles = [];
+  state.dirty = false;
+  state.botInstalled =
+    state.botGuildIds.has(state.selectedGuildId) && state.botStatusKnown;
+  resetWarningSelection();
+  updateGuildHeader();
+  updateSummary();
+  syncVisibility();
+  renderGuilds();
+  try {
+    const [permissions, commands] = await Promise.all([
+      api.fetchJson(`/api/guilds/${state.selectedGuildId}/permissions`),
+      api.fetchJson(`/api/guilds/${state.selectedGuildId}/commands`),
+    ]);
+    if (state.botInstalled) {
+      try {
+        state.roles =
+          (await api.fetchJson(`/api/guilds/${state.selectedGuildId}/roles`))
+            .roles || [];
+      } catch (error) {
+        if (error.code === "BOT_NOT_IN_GUILD") {
+          state.botInstalled = false;
+          state.botGuildIds.delete(state.selectedGuildId);
+        } else setError(error);
+      }
     }
-    setLoadingDetails(true);
-    setError(null);
-    setDirty(false);
-    resetWarningSelection();
-
-    const guild = state.guilds.find((entry) => entry.id === state.selectedGuildId);
-    updateBotInstalled();
-    updateGuildHeader(guild);
-    updateBotStatusControls();
-
-    try {
-        const [permissionsData, commandsData] = await Promise.all([
-            fetchDashboardJson(`/api/guilds/${state.selectedGuildId}/permissions`),
-            fetchDashboardJson(`/api/guilds/${state.selectedGuildId}/commands`),
-        ]);
-
-        state.permissions = normalizePermissions(permissionsData.permissions || {});
-        state.permissions.commandPermissions = state.permissions.commandPermissions || {};
-        state.commands = commandsData.commands || [];
-
-        Object.keys(state.permissions.commandPermissions).forEach((commandName) => {
-            if (!state.commands.includes(commandName)) {
-                state.commands.push(commandName);
-            }
-        });
-
-        if (state.botInstalled) {
-            try {
-                const rolesData = await fetchDashboardJson(`/api/guilds/${state.selectedGuildId}/roles`);
-                state.roles = rolesData.roles || [];
-            } catch (error) {
-                if (error?.code === 'BOT_NOT_IN_GUILD') {
-                    state.botInstalled = false;
-                    state.roles = [];
-                } else {
-                    handleFetchError(error, 'Failed to fetch roles.');
-                }
-            }
-        } else {
-            state.roles = [];
-        }
-
-        updateGuildHeader(guild);
-        updateBotStatusControls();
-        state.originalPermissions = clonePermissions(state.permissions);
-        renderPanels();
-        const activeTab = document.querySelector('.tab.active')?.dataset.tab || 'settings';
-        switchTab(activeTab);
-    } catch (error) {
-        handleFetchError(error, 'Failed to load guild data.');
-    } finally {
-        setLoadingDetails(false);
-    }
+    state.permissions = normalizePermissions(permissions.permissions || {});
+    state.commands = commands.commands || [];
+    ensureCommands();
+    state.baseCommands = [...state.commands];
+    state.originalPermissions = clone(state.permissions);
+    renderPanels();
+    updateGuildHeader();
+  } catch (error) {
+    setError(error);
+  } finally {
+    state.loading = false;
+    syncVisibility();
+    renderGuilds();
+  }
 };
-
-const selectGuild = async (guildId) => {
-    if (state.dirty) {
-        const proceed = window.confirm('You have unsaved changes. Discard them and switch guilds?');
-        if (!proceed) {
-            return;
-        }
+const selectGuild = async (id) => {
+  if (state.loading || state.saving || state.warningBusy) return;
+  if (
+    state.dirty &&
+    !window.confirm("Discard your unsaved changes and switch servers?")
+  )
+    return;
+  setError(null);
+  state.selectedGuildId = id;
+  await loadGuildDetails();
+};
+const savePermissions = async () => {
+  if (!state.permissions || state.saving || state.loading || !state.dirty)
+    return;
+  const incomplete = state.commands.find((name) => {
+    const entry = state.permissions.commandPermissions[name];
+    return (
+      entry.restricted &&
+      !entry.allowedRoleIds.length &&
+      !entry.allowedUserIds.length
+    );
+  });
+  if (incomplete) {
+    switchTab("permissions");
+    $("commandSearch").value = incomplete;
+    $("commandFilter").value = "all";
+    renderCommands();
+    setError({
+      message: `Select a role or member for /${incomplete}, or turn off its restriction before saving.`,
+    });
+    return;
+  }
+  state.saving = true;
+  state.loading = true;
+  syncVisibility();
+  renderGuilds();
+  $("savePermissionsButton").textContent = "Saving…";
+  try {
+    const payload = {
+      adminRoleIds: state.permissions.adminRoleIds,
+      adminUserIds: state.permissions.adminUserIds,
+      commandPermissions: Object.fromEntries(
+        state.commands.map((name) => {
+          const { allowedRoleIds, allowedUserIds } =
+            state.permissions.commandPermissions[name];
+          return [name, { allowedRoleIds, allowedUserIds }];
+        }),
+      ),
+    };
+    const data = await api.fetchJson(
+      `/api/guilds/${state.selectedGuildId}/permissions`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+    );
+    state.permissions = normalizePermissions(data.permissions || payload);
+    ensureCommands();
+    state.originalPermissions = clone(state.permissions);
+    state.baseCommands = [...state.commands];
+    updateDirty();
+    renderPanels();
+    setError(null);
+    api.showToast("Changes saved.", "success");
+  } catch (error) {
+    setError(error);
+  } finally {
+    state.saving = false;
+    state.loading = false;
+    $("savePermissionsButton").textContent = "Save changes";
+    syncVisibility();
+    renderGuilds();
+  }
+};
+const discardChanges = () => {
+  if (!state.originalPermissions || state.saving) return;
+  state.permissions = clone(state.originalPermissions);
+  state.commands = [...state.baseCommands];
+  updateDirty();
+  renderPanels();
+  setError(null);
+};
+const addAdminUser = () => {
+  if (!state.permissions || !state.botInstalled) return;
+  const ids = readIds($("adminUserInput"));
+  if (!ids.length) return;
+  state.permissions.adminUserIds = [
+    ...new Set([...state.permissions.adminUserIds, ...ids]),
+  ];
+  $("adminUserInput").value = "";
+  updateDirty();
+  renderAdminUsers();
+};
+const addCommand = () => {
+  if (!state.permissions || !state.botInstalled) return;
+  const name = $("newCommandInput")
+    .value.trim()
+    .toLowerCase()
+    .replace(/^\//, "");
+  if (!/^[a-z0-9_-]{1,32}$/.test(name)) {
+    setError({
+      message:
+        "Use a command name of 1–32 letters, numbers, hyphens or underscores.",
+    });
+    return;
+  }
+  if (!state.commands.includes(name)) {
+    state.commands.push(name);
+    ensureCommands();
+  }
+  $("newCommandInput").value = "";
+  $("commandSearch").value = name;
+  $("commandFilter").value = "all";
+  updateDirty();
+  renderCommands();
+  setError(null);
+};
+const searchWarningMembers = async () => {
+  const query = $("warningsUserSearch").value.trim();
+  const version = ++state.searchVersion;
+  const guildId = state.selectedGuildId;
+  $("warningsUserResults").replaceChildren();
+  if (!guildId || !state.botInstalled || query.length < 2) {
+    $("warningsSearchStatus").textContent = query
+      ? "Enter at least 2 characters."
+      : "";
+    return;
+  }
+  $("warningsSearchStatus").textContent = "Looking up members…";
+  try {
+    const data = await api.fetchJson(
+      `/api/guilds/${guildId}/members?query=${encodeURIComponent(query)}`,
+    );
+    if (version !== state.searchVersion || guildId !== state.selectedGuildId)
+      return;
+    const members = data.members || [];
+    $("warningsSearchStatus").textContent = members.length
+      ? `${members.length} member${members.length === 1 ? "" : "s"} found`
+      : "No matching members.";
+    members.forEach((member) => {
+      const button = node(
+        "button",
+        `member-item${warningTarget() === member.id ? " active" : ""}`,
+      );
+      button.type = "button";
+      button.dataset.userId = member.id;
+      const meta = node("span", "member-item__meta");
+      meta.append(
+        node(
+          "span",
+          "member-item__name",
+          member.nick ||
+            member.user?.global_name ||
+            member.user?.username ||
+            member.id,
+        ),
+        node("span", "member-item__id", member.id),
+      );
+      button.append(meta);
+      button.addEventListener("click", () => {
+        if (!state.warningBusy) setWarningTarget(member);
+      });
+      $("warningsUserResults").append(button);
+    });
+  } catch (error) {
+    if (version !== state.searchVersion || guildId !== state.selectedGuildId)
+      return;
+    $("warningsSearchStatus").textContent =
+      "Search unavailable. Enter a user ID instead.";
+    setError(error);
+  }
+};
+const renderWarnings = (warnings) => {
+  $("warningsList").replaceChildren();
+  $("warningsEmpty").hidden = warnings.length > 0;
+  $("warningsEmpty").textContent = "No warnings.";
+  $("warningsTotalCount").textContent = warnings.length;
+  const dates = warnings
+    .filter((warning) => warning.createdAt)
+    .map((warning) => new Date(warning.createdAt))
+    .filter((date) => !Number.isNaN(date.getTime()));
+  $("warningsLatestDate").textContent = dates.length
+    ? new Date(Math.max(...dates)).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "None";
+  [...warnings].reverse().forEach((warning) => {
+    const item = node("li", "warning-item");
+    const meta = node("div", "warning-item__meta");
+    meta.append(
+      node("span", "", `Moderator: ${warning.moderatorId || "Unknown"}`),
+      node(
+        "span",
+        "",
+        warning.createdAt
+          ? new Date(warning.createdAt).toLocaleString()
+          : "Unknown date",
+      ),
+    );
+    const copy = node("button", "button button--ghost", "Copy moderator ID");
+    copy.type = "button";
+    copy.disabled = !warning.moderatorId;
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(warning.moderatorId);
+        api.showToast("Moderator ID copied.");
+      } catch {
+        api.showToast("Unable to copy the moderator ID.", "error");
+      }
+    });
+    item.append(node("p", "", warning.reason), meta, copy);
+    $("warningsList").append(item);
+  });
+};
+const updateWarningCount = () => {
+  $("warningCharCount").textContent =
+    `${$("warningReasonInput").value.length}/500`;
+};
+const warningAction = async (method = "GET") => {
+  if (!state.selectedGuildId || state.warningBusy || state.loading) return;
+  const id = warningTarget();
+  if (!/^\d{17,20}$/.test(id)) {
+    setError({
+      message:
+        "Select a member or enter a valid Discord user ID (17–20 digits).",
+    });
+    $("warningsUserInput").focus();
+    return;
+  }
+  const reason = $("warningReasonInput").value.trim();
+  if (method === "POST" && (!reason || reason.length > 500)) {
+    $("warningStatus").textContent =
+      "Please enter a reason of 1–500 characters.";
+    $("warningReasonInput").focus();
+    return;
+  }
+  if (
+    method === "DELETE" &&
+    !window.confirm(
+      `Clear all warnings for member ${id}? This cannot be undone.`,
+    )
+  )
+    return;
+  const guildId = state.selectedGuildId;
+  state.warningBusy = true;
+  $("warningsSpinner").hidden = false;
+  const locked = [
+    "fetchWarningsButton",
+    "clearWarningsButton",
+    "addWarningButton",
+    "warningsUserInput",
+    "warningsUserSearch",
+    "warningReasonInput",
+  ];
+  const previousDisabled = locked.map((key) => $(key).disabled);
+  locked.forEach((key) => {
+    $(key).disabled = true;
+  });
+  try {
+    const data = await api.fetchJson(`/api/guilds/${guildId}/warnings/${id}`, {
+      method,
+      ...(method === "POST" ? { body: JSON.stringify({ reason }) } : {}),
+    });
+    if (guildId !== state.selectedGuildId || id !== warningTarget()) return;
+    renderWarnings(data.warnings || []);
+    setError(null);
+    if (method !== "GET") {
+      const message =
+        method === "POST"
+          ? "Warning added to the member record."
+          : "Warnings cleared.";
+      $("warningStatus").textContent = message;
+      api.showToast(message);
+      if (method === "POST") {
+        $("warningReasonInput").value = "";
+        updateWarningCount();
+      }
     }
-    state.selectedGuildId = guildId;
+  } catch (error) {
+    setError(error);
+  } finally {
+    state.warningBusy = false;
+    $("warningsSpinner").hidden = true;
+    locked.forEach((key, i) => {
+      $(key).disabled = previousDisabled[i];
+    });
+  }
+};
+const refreshBotStatus = async () => {
+  if (state.loading || state.saving || state.warningBusy) return;
+  if (
+    state.dirty &&
+    !window.confirm("Discard unsaved changes and refresh this server?")
+  )
+    return;
+  state.loading = true;
+  syncVisibility();
+  renderGuilds();
+  $("refreshBotButton").disabled = true;
+  setError(null);
+  await loadBotGuilds();
+  await loadGuildDetails();
+  $("refreshBotButton").disabled = false;
+};
+const openInvite = async () => {
+  $("inviteButton").disabled = true;
+  try {
+    const data = await api.fetchJson(
+      `/api/invite-url?guildId=${state.selectedGuildId}`,
+    );
+    if (data.inviteUrl) window.location.assign(data.inviteUrl);
+  } catch (error) {
+    setError(error);
+  } finally {
+    $("inviteButton").disabled = false;
+  }
+};
+const openCopyModal = () => {
+  $("copyGuildSelect").replaceChildren();
+  state.guilds
+    .filter((guild) => guild.id !== state.selectedGuildId)
+    .forEach((guild) => {
+      const option = node("option", "", guild.name);
+      option.value = guild.id;
+      $("copyGuildSelect").append(option);
+    });
+  $("confirmCopyButton").disabled = !$("copyGuildSelect").options.length;
+  $("copyModal").showModal();
+};
+const confirmCopy = async () => {
+  const guildId = $("copyGuildSelect").value;
+  if (!guildId || !state.permissions) return;
+  const targetGuildId = state.selectedGuildId;
+  $("confirmCopyButton").disabled = true;
+  try {
+    const data = await api.fetchJson(`/api/guilds/${guildId}/permissions`);
+    if (state.selectedGuildId !== targetGuildId || !state.permissions) return;
+    state.permissions = normalizePermissions(data.permissions || {});
+    ensureCommands();
+    updateDirty();
+    renderPanels();
+    api.showToast("Permissions copied. Review before saving.");
+    $("copyModal").close();
+  } catch (error) {
+    $("copyModal").close();
+    setError(error);
+  } finally {
+    $("confirmCopyButton").disabled = false;
+  }
+};
+const initDashboard = async () => {
+  document
+    .querySelectorAll(".tab")
+    .forEach((tab) =>
+      tab.addEventListener("click", () => switchTab(tab.dataset.tab)),
+    );
+  document.querySelectorAll("[data-open-tab]").forEach((button) =>
+    button.addEventListener("click", () => {
+      switchTab(button.dataset.openTab);
+      $("mainContent").focus({ preventScroll: true });
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }),
+  );
+  $("guildSearch").addEventListener("input", renderGuilds);
+  $("commandSearch").addEventListener("input", renderCommands);
+  $("commandFilter").addEventListener("change", renderCommands);
+  $("addAdminUserButton").addEventListener("click", addAdminUser);
+  $("adminUserInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") addAdminUser();
+  });
+  $("addCommandButton").addEventListener("click", addCommand);
+  $("newCommandInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") addCommand();
+  });
+  $("savePermissionsButton").addEventListener("click", savePermissions);
+  $("discardChangesButton").addEventListener("click", discardChanges);
+  $("fetchWarningsButton").addEventListener("click", () => warningAction());
+  $("addWarningButton").addEventListener("click", () => warningAction("POST"));
+  $("clearWarningsButton").addEventListener("click", () =>
+    warningAction("DELETE"),
+  );
+  $("warningReasonInput").addEventListener("input", updateWarningCount);
+  const debouncedSearch = api.debounce(searchWarningMembers, 250);
+  $("warningsUserSearch").addEventListener("input", () => {
+    state.searchVersion += 1;
+    debouncedSearch();
+  });
+  $("warningsUserInput").addEventListener("input", () => setWarningTarget());
+  $("inviteButton").addEventListener("click", openInvite);
+  $("refreshBotButton").addEventListener("click", refreshBotStatus);
+  $("clearAllCommands").addEventListener("click", () => {
+    if (!state.permissions || !state.botInstalled) return;
+    if (
+      !window.confirm(
+        "Reset all custom command restrictions? Review and save to apply this change.",
+      )
+    )
+      return;
+    state.commands.forEach((name) => {
+      state.permissions.commandPermissions[name] = normalizeEntry();
+    });
+    updateDirty();
+    renderCommands();
+  });
+  $("copyFromGuild").addEventListener("click", openCopyModal);
+  $("cancelCopyButton").addEventListener("click", () => $("copyModal").close());
+  $("confirmCopyButton").addEventListener("click", confirmCopy);
+  $("guildHeaderIcon").addEventListener("error", () => {
+    $("guildHeaderIcon").hidden = true;
+    $("guildHeaderFallback").hidden = false;
+  });
+  $("logoutButton").addEventListener("click", async () => {
+    if (state.saving || state.warningBusy) return;
+    if (state.dirty && !window.confirm("Discard unsaved changes and log out?"))
+      return;
+    try {
+      await api.fetchJson("/auth/logout", { method: "POST" });
+      state.dirty = false;
+      window.location.href = "/";
+    } catch (error) {
+      setError(error);
+    }
+  });
+  window.addEventListener("beforeunload", (event) => {
+    if (state.dirty) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+  });
+  $("guildListSkeleton").hidden = false;
+  $("guildList").hidden = true;
+  try {
+    const session = await api.fetchJson("/api/me");
+    api.setCsrfToken(session.csrfToken);
+    const displayName =
+      session.user?.global_name || api.formatUserDisplay(session.user);
+    $("userDisplay").textContent = displayName;
+    $("userInitial").textContent = initials(displayName);
+    $("sessionExpiry").textContent = "Discord account";
+    if (session.expiresAt)
+      $("sessionExpiry").title =
+        `Session expires ${new Date(session.expiresAt).toLocaleString()}`;
+  } catch (error) {
+    if (error.status === 401 || error.status === 403)
+      window.location.replace("/");
+    else setError(error);
+    $("guildListSkeleton").hidden = true;
+    return;
+  }
+  try {
+    const [guildData] = await Promise.all([
+      api.fetchJson("/api/guilds"),
+      loadBotGuilds(),
+    ]);
+    state.guilds = guildData.guilds || [];
+    state.selectedGuildId = state.guilds[0]?.id || null;
     renderGuilds();
     await loadGuildDetails();
+  } catch (error) {
+    setError(error);
+  } finally {
+    $("guildListSkeleton").hidden = true;
+    $("guildList").hidden = false;
+    syncVisibility();
+  }
 };
-
-const addAdminUser = () => {
-    const values = parseIdList(elements.adminUserInput.value);
-    if (values.length === 0) {
-        return;
-    }
-    state.permissions.adminUserIds = Array.from(new Set([...state.permissions.adminUserIds, ...values]));
-    elements.adminUserInput.value = '';
-    setDirty(true);
-    renderAdminUsers();
-};
-
-const addCommand = () => {
-    const value = elements.newCommandInput.value.trim();
-    if (!value) {
-        return;
-    }
-    if (!COMMAND_NAME_REGEX.test(value)) {
-        setError({message: 'Command name must be 1-32 characters and use letters, numbers, - or _.'});
-        return;
-    }
-    if (!state.commands.includes(value)) {
-        state.commands.push(value);
-        setDirty(true);
-    }
-    elements.newCommandInput.value = '';
-    renderCommands();
-};
-
-const savePermissions = async () => {
-    if (!state.selectedGuildId) {
-        return;
-    }
-
-    setLoadingDetails(true);
-    try {
-        const data = await fetchDashboardJson(`/api/guilds/${state.selectedGuildId}/permissions`, {
-            method: 'PATCH',
-            body: JSON.stringify(state.permissions),
-        });
-        state.permissions = normalizePermissions(data.permissions || {});
-        state.originalPermissions = clonePermissions(state.permissions);
-        setDirty(false);
-        dashboardApi.showToast('Permissions saved.', 'success');
-        renderPanels();
-    } catch (error) {
-        handleFetchError(error, 'Failed to save permissions.');
-    } finally {
-        setLoadingDetails(false);
-    }
-};
-
-const discardChanges = () => {
-    if (!state.originalPermissions) {
-        return;
-    }
-    state.permissions = clonePermissions(state.originalPermissions);
-    setDirty(false);
-    renderPanels();
-};
-
-const switchTab = (tabName) => {
-    elements.tabs.forEach((tab) => {
-        tab.classList.toggle('active', tab.dataset.tab === tabName);
-    });
-    elements.settingsPanel.hidden = tabName !== 'settings';
-    elements.permissionsPanel.hidden = tabName !== 'permissions';
-    elements.warningsPanel.hidden = tabName !== 'warnings';
-};
-
-const resolveWarningUserId = (value) => {
-    if (value && value.trim()) {
-        return value.trim();
-    }
-    return state.selectedWarningUser?.id || '';
-};
-
-const renderWarningMembers = (members = []) => {
-    elements.warningsUserResults.innerHTML = '';
-    if (!members.length) {
-        const empty = document.createElement('span');
-        empty.className = 'muted';
-        empty.textContent = 'No members found.';
-        elements.warningsUserResults.appendChild(empty);
-        return;
-    }
-
-    members.forEach((member) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = `member-item${state.selectedWarningUser?.id === member.id ? ' active' : ''}`;
-        const meta = document.createElement('div');
-        meta.className = 'member-item__meta';
-        const name = document.createElement('span');
-        name.className = 'member-item__name';
-        name.textContent = formatMemberDisplay(member);
-        const id = document.createElement('span');
-        id.className = 'member-item__id';
-        id.textContent = member.id;
-        meta.appendChild(name);
-        meta.appendChild(id);
-        button.appendChild(meta);
-        button.addEventListener('click', () => {
-            setSelectedWarningUser(member);
-            renderWarningMembers(members);
-        });
-        elements.warningsUserResults.appendChild(button);
-    });
-};
-
-const searchWarningMembers = async (query) => {
-    if (!state.selectedGuildId || !query || query.trim().length < 2) {
-        elements.warningsUserResults.innerHTML = '';
-        return;
-    }
-    try {
-        const data = await fetchDashboardJson(
-            `/api/guilds/${state.selectedGuildId}/members?query=${encodeURIComponent(query.trim())}`,
-        );
-        const members = data.members || [];
-        renderWarningMembers(members);
-    } catch (error) {
-        handleFetchError(error, 'Failed to search members.');
-    }
-};
-
-const fetchWarnings = async () => {
-    const userId = resolveWarningUserId(elements.warningsUserInput.value);
-    if (!userId) {
-        setError({message: 'Enter a user ID to fetch warnings.'});
-        return;
-    }
-    elements.warningsSpinner.hidden = false;
-    try {
-        const data = await fetchDashboardJson(`/api/guilds/${state.selectedGuildId}/warnings/${userId}`);
-        const warnings = data.warnings || [];
-        elements.warningsList.innerHTML = '';
-        if (warnings.length === 0) {
-            elements.warningsEmpty.hidden = false;
-        } else {
-            elements.warningsEmpty.hidden = true;
-            warnings.forEach((warning) => {
-                const item = document.createElement('li');
-                item.className = 'warning-item';
-                const text = document.createElement('p');
-                text.textContent = warning.reason;
-                const meta = document.createElement('div');
-                meta.className = 'warning-item__meta';
-                const dateText = warning.createdAt ? new Date(warning.createdAt).toLocaleString() : 'Unknown date';
-                const moderator = document.createElement('span');
-                moderator.textContent = `Moderator: ${warning.moderatorId || 'Unknown'}`;
-                const copyButton = document.createElement('button');
-                copyButton.type = 'button';
-                copyButton.className = 'button button--ghost';
-                copyButton.textContent = 'Copy moderator ID';
-                copyButton.addEventListener('click', async () => {
-                    if (!warning.moderatorId) {
-                        return;
-                    }
-                    try {
-                        await navigator.clipboard.writeText(warning.moderatorId);
-                        dashboardApi.showToast('Moderator ID copied.', 'success');
-                    } catch (error) {
-                        dashboardApi.showToast('Unable to copy moderator ID.', 'error');
-                    }
-                });
-                meta.appendChild(moderator);
-                meta.appendChild(document.createElement('span')).textContent = dateText;
-                item.appendChild(text);
-                item.appendChild(meta);
-                item.appendChild(copyButton);
-                elements.warningsList.appendChild(item);
-            });
-        }
-        setError(null);
-    } catch (error) {
-        handleFetchError(error, 'Failed to fetch warnings.');
-    } finally {
-        elements.warningsSpinner.hidden = true;
-    }
-};
-
-const updateWarningCount = () => {
-    const length = elements.warningReasonInput.value.length;
-    elements.warningCharCount.textContent = `${length}/200`;
-};
-
-const addWarning = async () => {
-    const userId = resolveWarningUserId(elements.newWarningUserInput.value);
-    const reason = elements.warningReasonInput.value.trim();
-    if (!userId || !reason) {
-        elements.warningStatus.textContent = 'User ID and reason are required.';
-        return;
-    }
-    if (reason.length > 200) {
-        elements.warningStatus.textContent = 'Reason must be under 200 characters.';
-        return;
-    }
-
-    elements.warningStatus.textContent = '';
-    try {
-        const data = await fetchDashboardJson(`/api/guilds/${state.selectedGuildId}/warnings/${userId}`, {
-            method: 'POST',
-            body: JSON.stringify({reason}),
-        });
-        elements.warningStatus.textContent = `Warning added. Total warnings: ${data.warnings?.length || 0}`;
-        elements.warningReasonInput.value = '';
-        updateWarningCount();
-        dashboardApi.showToast('Warning saved.', 'success');
-    } catch (error) {
-        handleFetchError(error, 'Failed to add warning.');
-    }
-};
-
-const clearWarnings = async () => {
-    const userId = resolveWarningUserId(elements.warningsUserInput.value);
-    if (!userId) {
-        setError({message: 'Select a user to clear warnings.'});
-        return;
-    }
-    const proceed = window.confirm('Clear all warnings for this user?');
-    if (!proceed) {
-        return;
-    }
-    try {
-        await fetchDashboardJson(`/api/guilds/${state.selectedGuildId}/warnings/${userId}`, {
-            method: 'DELETE',
-        });
-        elements.warningsList.innerHTML = '';
-        elements.warningsEmpty.hidden = false;
-        elements.warningStatus.textContent = 'Warnings cleared.';
-        dashboardApi.showToast('Warnings cleared.', 'success');
-    } catch (error) {
-        handleFetchError(error, 'Failed to clear warnings.');
-    }
-};
-
-const refreshBotStatus = async () => {
-    await loadBotGuilds();
-    updateBotInstalled();
-    const guild = state.guilds.find((entry) => entry.id === state.selectedGuildId);
-    updateGuildHeader(guild);
-    updateBotStatusControls();
-    renderPanels();
-};
-
-const openInvite = async () => {
-    try {
-        const data = await fetchDashboardJson(`/api/invite-url?guildId=${state.selectedGuildId}`);
-        if (data.inviteUrl) {
-            window.open(data.inviteUrl, '_blank', 'noopener,noreferrer');
-        }
-    } catch (error) {
-        handleFetchError(error, 'Failed to generate invite URL.');
-    }
-};
-
-const openCopyModal = () => {
-    elements.copyGuildSelect.innerHTML = '';
-    state.guilds
-        .filter((guild) => guild.id !== state.selectedGuildId)
-        .forEach((guild) => {
-            const option = document.createElement('option');
-            option.value = guild.id;
-            option.textContent = guild.name;
-            elements.copyGuildSelect.appendChild(option);
-        });
-    elements.copyModal.hidden = false;
-};
-
-const closeCopyModal = () => {
-    elements.copyModal.hidden = true;
-};
-
-const confirmCopy = async () => {
-    const guildId = elements.copyGuildSelect.value;
-    if (!guildId) {
-        closeCopyModal();
-        return;
-    }
-    try {
-        const data = await fetchDashboardJson(`/api/guilds/${guildId}/permissions`);
-        state.permissions = normalizePermissions(data.permissions || {});
-        setDirty(true);
-        renderPanels();
-        dashboardApi.showToast('Permissions copied. Review before saving.', 'success');
-    } catch (error) {
-        handleFetchError(error, 'Failed to copy permissions.');
-    } finally {
-        closeCopyModal();
-    }
-};
-
-const initDashboard = async () => {
-    try {
-        await loadSession();
-        await Promise.all([loadGuilds(), loadBotGuilds()]);
-        renderGuilds();
-        if (state.selectedGuildId) {
-            await loadGuildDetails();
-        }
-    } catch (error) {
-        setError({message: 'Please log in to access the dashboard.'});
-        window.location.href = '/';
-        return;
-    }
-
-    elements.logoutButton.addEventListener('click', async () => {
-        await fetch('/auth/logout', {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                ...(dashboardApi.getCsrfToken() ? {'X-CSRF-Token': dashboardApi.getCsrfToken()} : {}),
-            },
-        });
-        window.location.href = '/';
-    });
-
-    elements.tabs.forEach((tab) => {
-        tab.addEventListener('click', () => switchTab(tab.dataset.tab));
-    });
-
-    elements.addAdminUserButton.addEventListener('click', addAdminUser);
-    elements.adminUserInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            addAdminUser();
-        }
-    });
-    elements.addCommandButton.addEventListener('click', addCommand);
-    elements.savePermissionsButton.addEventListener('click', savePermissions);
-    elements.discardChangesButton.addEventListener('click', discardChanges);
-    elements.fetchWarningsButton.addEventListener('click', fetchWarnings);
-    elements.clearWarningsButton.addEventListener('click', clearWarnings);
-    elements.addWarningButton.addEventListener('click', addWarning);
-    elements.warningReasonInput.addEventListener('input', updateWarningCount);
-    elements.warningsUserSearch.addEventListener(
-        'input',
-        dashboardApi.debounce((event) => {
-            searchWarningMembers(event.target.value);
-        }, 250),
-    );
-    elements.warningsUserInput.addEventListener('input', (event) => {
-        setManualWarningUser(event.target.value.trim());
-    });
-    elements.newWarningUserInput.addEventListener('input', (event) => {
-        if (event.target.value.trim()) {
-            setManualWarningUser(event.target.value.trim());
-        }
-    });
-    elements.inviteButton.addEventListener('click', openInvite);
-    elements.refreshBotButton.addEventListener('click', refreshBotStatus);
-    elements.clearAllCommands.addEventListener('click', () => {
-        Object.keys(state.permissions.commandPermissions).forEach((commandName) => {
-            state.permissions.commandPermissions[commandName] = {
-                allowedRoleIds: [],
-                allowedUserIds: [],
-                restricted: false,
-            };
-        });
-        setDirty(true);
-        renderCommands();
-    });
-    elements.copyFromGuild.addEventListener('click', openCopyModal);
-    elements.cancelCopyButton.addEventListener('click', closeCopyModal);
-    elements.confirmCopyButton.addEventListener('click', confirmCopy);
-    updateWarningCount();
-
-    elements.guildSearch.addEventListener(
-        'input',
-        dashboardApi.debounce((event) => {
-            const query = event.target.value.toLowerCase();
-            state.filteredGuilds = state.guilds.filter((guild) => guild.name.toLowerCase().includes(query));
-            renderGuilds();
-        }, 200),
-    );
-
-    window.addEventListener('beforeunload', (event) => {
-        if (state.dirty) {
-            event.preventDefault();
-            event.returnValue = '';
-        }
-    });
-};
-
-document.addEventListener('DOMContentLoaded', () => {
-    initDashboard();
-});
+document.addEventListener("DOMContentLoaded", initDashboard);

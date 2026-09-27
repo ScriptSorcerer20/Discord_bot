@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 380" fill="none">
+<defs>
+<linearGradient id="brass" x1="141" y1="160" x2="344" y2="251" gradientUnits="userSpaceOnUse"><stop stop-color="#7b5d30"/><stop offset=".22" stop-color="#c6a366"/><stop offset=".43" stop-color="#f3ddb0"/><stop offset=".63" stop-color="#d4b77b"/><stop offset=".86" stop-color="#9f7a40"/><stop offset="1" stop-color="#6d4a23"/></linearGradient>
+<linearGradient id="rim" x1="127" y1="258" x2="364" y2="278" gradientUnits="userSpaceOnUse"><stop stop-color="#806031"/><stop offset=".4" stop-color="#ead3a6"/><stop offset=".7" stop-color="#b7955a"/><stop offset="1" stop-color="#74512a"/></linearGradient>
+<linearGradient id="arch" x1="260" y1="22" x2="260" y2="345" gradientUnits="userSpaceOnUse"><stop stop-color="#e8dec9"/><stop offset="1" stop-color="#e8dec9" stop-opacity=".1"/></linearGradient>
+<radialGradient id="shadow"><stop stop-color="#483728" stop-opacity=".25"/><stop offset="1" stop-color="#483728" stop-opacity="0"/></radialGradient>
+</defs>
+<path d="M115 342V162a135 135 0 0 1 270 0v180" fill="url(#arch)"/>
+<g stroke="#b69b6a" stroke-opacity=".45"><path d="M99 342V158a151 151 0 0 1 302 0v184"/><path d="M109 342V158a141 141 0 0 1 282 0v184"/><path d="M121 342V160a129 129 0 0 1 258 0v182"/><path d="M133 342V162a117 117 0 0 1 234 0v180"/><path d="M79 342h342"/></g>
+<circle cx="250" cy="190" r="94" stroke="#b69b6a" stroke-opacity=".3" stroke-dasharray="2 5"/>
+<ellipse cx="252" cy="292" rx="151" ry="24" fill="url(#shadow)"/>
+<path d="M128 275h245l8 11H120z" fill="#493032"/>
+<path d="M135 270h231l7 8H128z" fill="#6e4e45"/>
+<rect x="135" y="259" width="231" height="13" rx="4" fill="url(#rim)"/>
+<path d="M148 254c0-51 39-91 102-91s102 40 102 91z" fill="url(#brass)" stroke="#a07e44" stroke-width="1"/>
+<path d="M157 249c2-42 31-73 76-78" stroke="#f6e5be" stroke-opacity=".65" stroke-width="2"/>
+<path d="M143 253h214v8H143z" fill="url(#rim)"/>
+<path d="M245 146h10v19h-10z" fill="url(#rim)"/>
+<ellipse cx="250" cy="145" rx="18" ry="5" fill="url(#brass)" stroke="#ad8e54"/>
+<path d="M239 213h22m-11-11v22" stroke="#755627" stroke-opacity=".48"/>
+<g fill="#b09462"><path d="m411 93 3 9 9 3-9 3-3 9-3-9-9-3 9-3z"/><path d="m88 238 2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/></g>
+<path d="M433 215v65m-5-65h10m-10 65h10" stroke="#b69b6a" stroke-opacity=".6"/>
+<text x="250" y="322" text-anchor="middle" fill="#8f7953" font-size="9" font-family="Georgia,serif" letter-spacing="4">THE STEWARD</text>
+</svg>
